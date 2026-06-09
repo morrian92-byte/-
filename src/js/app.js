@@ -1022,3 +1022,4 @@ document.addEventListener('DOMContentLoaded', () => {
     // Cancel inline selector
     document.getElementById('btn-cancel-select').addEventListener('click', hideInlineSelector);
 });
+// auto deploy trigger Wed Jun 10 00:32:55     2026
