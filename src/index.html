@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>步步高升 — 官场模拟器</title>
+    <link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+    <!-- ====== 考公引导界面 ====== -->
+    <div id="onboarding-overlay" class="modal" style="display:flex">
+        <div class="modal-content" style="max-width:600px">
+            <!-- 步骤0: 入口选择 -->
+            <div id="onboard-step-entry">
+                <h2>🏛️ 步步高升</h2>
+                <p style="color:var(--text-secondary);margin-bottom:24px;text-align:center">
+                    现代中国官场模拟 · 从基层到权力中心
+                </p>
+                <button class="btn-primary" onclick="continueCareer()" style="width:100%;margin-bottom:12px">
+                    📂 继续仕途
+                </button>
+                <button class="btn-secondary" onclick="startNewCareer()" style="width:100%">
+                    🆕 开启政治生命
+                </button>
+                <div id="entry-save-hint" style="margin-top:12px;font-size:11px;color:var(--text-secondary);text-align:center"></div>
+            </div>
+
+            <!-- 步骤1: 姓名输入 -->
+            <div id="onboard-step-name" class="hidden">
+                <h2>📝 公务员录用考试</h2>
+                <p style="color:var(--text-secondary);margin-bottom:20px">
+                    欢迎参加国家公务员考试。请先填写你的信息。
+                </p>
+                <label style="color:var(--accent-gold)">姓名</label>
+                <input id="input-player-name" type="text" value="张三" maxlength="6"
+                    style="width:100%;padding:10px;background:var(--bg-primary);color:var(--text-primary);
+                    border:1px solid var(--border);border-radius:4px;font-size:16px;margin:8px 0 16px">
+                <label style="color:var(--accent-gold)">性别</label>
+                <select id="input-player-gender"
+                    style="width:100%;padding:10px;background:var(--bg-primary);color:var(--text-primary);
+                    border:1px solid var(--border);border-radius:4px;font-size:16px;margin:8px 0 16px">
+                    <option value="男">男</option>
+                    <option value="女">女</option>
+                </select>
+                <button class="btn-primary" onclick="startExam()" style="width:100%">
+                    开始考试 →
+                </button>
+            </div>
+
+            <!-- 步骤2: 考试 -->
+            <div id="onboard-step-exam" class="hidden">
+                <h2>📝 行政职业能力测验 <span id="exam-progress" style="font-size:14px;color:var(--text-secondary)"></span></h2>
+                <p id="exam-question" style="margin:16px 0;line-height:1.8"></p>
+                <div id="exam-options"></div>
+            </div>
+
+            <!-- 步骤3: 成绩+选地区 -->
+            <div id="onboard-step-result" class="hidden">
+                <h2>📋 考试成绩</h2>
+                <div id="exam-score-display" style="text-align:center;margin:16px 0"></div>
+                <p id="exam-tier-desc" style="color:var(--text-secondary);margin-bottom:16px"></p>
+                <label style="color:var(--accent-gold)">选择入职省份</label>
+                <div id="province-choices" style="margin:8px 0 16px"></div>
+                <label style="color:var(--accent-gold)">选择起始岗位</label>
+                <div id="position-choices" style="margin:8px 0 16px"></div>
+                <button class="btn-primary" onclick="confirmOnboarding()" style="width:100%">
+                    🚀 报到入职
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 顶栏 -->
+    <header id="top-bar">
+        <span id="date-display">2022年1月</span>
+        <span class="separator">|</span>
+        <span id="era-display">新时代</span>
+        <span class="separator">|</span>
+        <span id="rank-display">办事员</span>
+        <span class="separator">|</span>
+        <span id="name-display">张三</span>
+        <span class="separator">|</span>
+        <span>年龄<span id="age-display">22</span></span>
+        <span id="term-warning" class="hidden">⚠ 任期将满</span>
+    </header>
+
+    <main id="main-layout">
+        <!-- 左栏：资源 + 项目 -->
+        <aside id="left-panel">
+            <!-- 资源面板 -->
+            <section id="resource-panel">
+                <h2>资源</h2>
+                <div class="resource-row" id="res-performance">
+                    <span class="res-label">政绩</span>
+                    <span class="res-value" id="val-performance">50</span>
+                    <span class="res-status" id="status-performance">合格</span>
+                </div>
+                <div class="resource-row" id="res-connections">
+                    <span class="res-label">人脉</span>
+                    <span class="res-value" id="val-connections">30</span>
+                </div>
+                <div class="resource-row" id="res-budget">
+                    <span class="res-label">财力</span>
+                    <span class="res-value" id="val-budget">200</span>
+                </div>
+            </section>
+
+            <!-- 项目面板 -->
+            <section id="project-panel">
+                <h2>进行中的项目</h2>
+                <div id="project-list"></div>
+            </section>
+
+            <!-- 晋升条件面板 -->
+            <section id="promotion-panel">
+                <h2>⬆ 晋升条件 — <span id="next-rank-name">副股级</span></h2>
+                <div id="promotion-checks"></div>
+            </section>
+
+            <!-- 操作按钮 -->
+            <section id="action-buttons">
+                <button id="btn-save" class="btn-secondary">💾 保存</button>
+                <button id="btn-load" class="btn-secondary">📂 加载</button>
+            </section>
+        </aside>
+
+        <!-- 中栏：行动区域 -->
+        <section id="center-panel">
+            <h2>本月行动 <span id="action-points">剩余 3 点</span></h2>
+
+            <div id="action-choices">
+                <button class="btn-action" data-action="work">📋 常规工作 (政绩+1~2)</button>
+                <button class="btn-action" data-action="social">🍽️ 社交活动 (选择NPC)</button>
+                <button class="btn-action" data-action="push-project">🚀 推进项目 / 启动新项目</button>
+                <button class="btn-action" data-action="gray-ops">🕶️ 灰色操作 (搞钱)</button>
+                <button class="btn-action disabled" data-action="handle-event" id="btn-events" disabled>
+                    ⚡ 处理事件 (<span id="event-count">0</span>)
+                </button>
+            </div>
+
+            <!-- 内联选择区域 -->
+            <div id="inline-selector" class="hidden">
+                <h3 id="selector-title"></h3>
+                <div id="selector-options"></div>
+                <button id="btn-cancel-select" class="btn-secondary">取消</button>
+            </div>
+
+            <button id="btn-end-month" class="btn-primary">
+                📅 结束本月 →
+            </button>
+        </section>
+
+        <!-- 右栏：NPC + 事件 -->
+        <aside id="right-panel">
+            <!-- NPC 面板 -->
+            <section id="npc-panel">
+                <h2>关键人物</h2>
+                <div id="npc-list"></div>
+            </section>
+
+            <!-- 事件面板 -->
+            <section id="event-panel">
+                <h2>最近事件</h2>
+                <div id="event-feed"></div>
+            </section>
+        </aside>
+    </main>
+
+    <!-- 事件弹窗（默认隐藏） -->
+    <div id="event-modal" class="modal hidden">
+        <div class="modal-content">
+            <h2 id="event-title"></h2>
+            <p id="event-body"></p>
+            <div id="event-options"></div>
+            <button id="btn-confirm-choice" class="btn-primary">确认选择</button>
+        </div>
+    </div>
+
+    <!-- 存档弹窗 -->
+    <div id="save-modal" class="modal hidden">
+        <div class="modal-content">
+            <h2>保存游戏</h2>
+            <div id="save-slots"></div>
+            <button id="btn-close-save" class="btn-secondary">关闭</button>
+        </div>
+    </div>
+
+    <!-- 读档弹窗 -->
+    <div id="load-modal" class="modal hidden">
+        <div class="modal-content">
+            <h2>加载存档</h2>
+            <div id="load-slots"></div>
+            <button id="btn-close-load" class="btn-secondary">关闭</button>
+        </div>
+    </div>
+
+    <script src="js/data/locations.js"></script>
+    <script src="js/data/enterprises.js"></script>
+    <script src="js/data/positions.js"></script>
+    <script src="js/data/exam.js"></script>
+    <script src="js/systems/time.js"></script>
+    <script src="js/systems/rank-db.js"></script>
+    <script src="js/systems/persistence.js"></script>
+    <script src="js/systems/resources.js"></script>
+    <script src="js/systems/npc.js"></script>
+    <script src="js/systems/relationships.js"></script>
+    <script src="js/systems/projects.js"></script>
+    <script src="js/systems/events.js"></script>
+    <script src="js/systems/evaluation.js"></script>
+    <script src="js/systems/promotion.js"></script>
+    <script src="js/systems/grayzone.js"></script>
+    <script src="js/ui/dashboard.js"></script>
+    <script src="js/ui/event-panel.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
