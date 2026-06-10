@@ -18,8 +18,9 @@ const EventPanel = {
             const lockText = locked
                 ? `<div class="risk">⚠ 需要人脉 ≥ ${opt.needConn}（当前 ${ResourceSystem.connections}）</div>`
                 : '';
-            const riskText = opt.risk > 0
-                ? `<div class="risk">风险：${'★'.repeat(opt.risk)}${'☆'.repeat(4-opt.risk)}</div>`
+            const riskR = Math.min(opt.risk||0, 5);
+            const riskText = riskR > 0
+                ? `<div class="risk">风险：${'★'.repeat(riskR)}${'☆'.repeat(Math.max(0,5-riskR))}</div>`
                 : '';
             const effectsText = opt.effects
                 ? Object.entries(opt.effects).filter(([,v]) => typeof v === 'number').map(([k,v]) => {
