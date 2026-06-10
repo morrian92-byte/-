@@ -404,77 +404,46 @@ function doAction(actionType) {
 
     switch (actionType) {
         case 'work': {
-            const deptActs = DeptActions.getActions();
-            const dept = DeptActions.getPlayerDept();
+            const randomActs = DeptActions.getRandomActions(5);
+            const dept = DeptActions.getPlayerDept() || '通用';
+            const profile = DeptActions.getPlayerProfile();
 
-            // 有部门特色行动 → 展示选择面板
-            if (dept && deptActs.length > 1) {
-                showInlineSelector(
-                    `📋 ${dept} · 本月工作（剩余 ${Dashboard.actionPointsRemaining} 点）`,
-                    deptActs.map((act, i) => ({
-                        label: act.label,
-                        sub: act.desc + (act.bonus ? ` · ${act.bonus}` : ''),
-                        cost: act.cost ? `消耗 ${act.cost} 财力` : '',
-                        callback: () => {
-                            consumeAction(act.label);
-                            if (act.effects.perf) ResourceSystem.adjustPerformance(act.effects.perf);
-                            if (act.effects.conn) ResourceSystem.adjustConnections(act.effects.conn);
-                            if (act.effects.budget) ResourceSystem.adjustBudget(act.effects.budget);
-                            if (act.cost) ResourceSystem.adjustBudget(-act.cost);
+            showInlineSelector(
+                `📋 ${dept} · 本月工作 [${profile}型]（剩余 ${Dashboard.actionPointsRemaining} 点）`,
+                randomActs.map(act => ({
+                    label: act.label,
+                    sub: act.desc + (act.bonus ? ` [${act.bonus}]` : ''),
+                    cost: act.cost ? `💰 ${act.cost}` : '',
+                    callback: () => {
+                        consumeAction(act.label);
+                        ResourceSystem.adjustPerformance(act.perf || 0);
+                        ResourceSystem.adjustConnections(act.conn || 0);
+                        if (act.budget) ResourceSystem.adjustBudget(act.budget);
+                        if (act.cost) ResourceSystem.adjustBudget(-act.cost);
+                        if (act.risk > 0) GrayZoneSystem.recordOperation(1, act.risk * 0.5);
 
-                            // bonus 效果
-                            if (act.bonus && act.bonus.includes('灰色风险')) {
-                                GrayZoneSystem.riskLevel = Math.max(0, GrayZoneSystem.riskLevel - 3);
+                        // bonus 文字效果
+                        if (act.bonus) {
+                            if (act.bonus.includes('项目进度+1')) ProjectSystem.activeProjects.forEach(p => p.progress++);
+                            if (act.bonus.includes('项目进度+2')) ProjectSystem.activeProjects.forEach(p => { p.progress += 2; });
+                            if (act.bonus.includes('灰色风险')) GrayZoneSystem.riskLevel = Math.max(0, (GrayZoneSystem.riskLevel||0) - 3);
+                            if (act.bonus.includes('灰色机会') && Math.random() < 0.35) {
+                                const biz = NPCPool.npcs.find(n => n.position.includes('老板')||n.position.includes('公司'));
+                                if (biz) EventSystem.pendingEvents.push({
+                                    id:'dept_gray_'+Date.now(), templateId:'dept_gray', title:'工作中的灰色机会', category:'灰色',
+                                    body:`${biz.name}借工作接触之机暗示有「感谢费」。`,
+                                    options:[{label:'拒绝',effects:{perf:1},risk:0},{label:'收下',effects:{budget:25,perf:-2},risk:2,grayLevel:1}]});
                             }
-                            if (act.bonus && act.bonus.includes('项目进度+1')) {
-                                ProjectSystem.activeProjects.forEach(p => p.progress++);
-                            }
-                            if (act.bonus && act.bonus.includes('项目进度+2')) {
-                                ProjectSystem.activeProjects.forEach(p => { p.progress += 2; });
-                            }
-                            if (act.bonus && act.bonus.includes('灰色机会')) {
-                                if (Math.random() < 0.4) {
-                                    const bizNPC = NPCPool.npcs.find(n => n.position.includes('老板') || n.position.includes('公司'));
-                                    if (bizNPC) {
-                                        EventSystem.pendingEvents.push({
-                                            id: 'dept_gray_' + Date.now(),
-                                            templateId: 'dept_gray_opp',
-                                            title: '部门灰色机会',
-                                            category: '灰色',
-                                            body: `${bizNPC.name}通过你的工作关系找到你，暗示有一笔「好处费」。`,
-                                            options: [
-                                                { label: '拒绝', effects: { perf: 1 }, risk: 0 },
-                                                { label: '收下', effects: { budget: 25, perf: -2 }, risk: 2, grayLevel: 1 },
-                                            ],
-                                        });
-                                    }
-                                }
-                            }
-
-                            EventSystem.eventHistory.push({
-                                id: 'dept_work_' + Date.now(),
-                                title: act.label,
-                                body: `${dept}：${act.desc}`,
-                                options: [{ label: '确认', effects: act.effects }],
-                                chosenOption: 0, resolvedMonth: TimeSystem.totalMonths,
-                            });
-                            Dashboard.refresh();
                         }
-                    }))
-                );
-            } else {
-                // 无部门特色 → 兜底通用工作
-                consumeAction('常规工作');
-                const perfGain = 1 + Math.floor(Math.random() * 2);
-                ResourceSystem.adjustPerformance(perfGain);
-                EventSystem.eventHistory.push({
-                    id: 'work_' + Date.now(), title: '常规工作',
-                    body: `完成了本月例行工作。政绩 +${perfGain}`,
-                    options: [{ label: '确认', effects: { perf: perfGain } }],
-                    chosenOption: 0, resolvedMonth: TimeSystem.totalMonths,
-                });
-                Dashboard.refresh();
-            }
+
+                        EventSystem.eventHistory.push({
+                            id:'dept_'+Date.now(), title:act.label, body:`${dept}：${act.desc}`,
+                            options:[{label:'确认',effects:{perf:act.perf,conn:act.conn}}], chosenOption:0, resolvedMonth:TimeSystem.totalMonths,
+                        });
+                        Dashboard.refresh();
+                    }
+                }))
+            );
             break;
         }
 
