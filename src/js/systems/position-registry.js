@@ -78,6 +78,43 @@ const PositionRegistry = {
         this.occupied[key] = playerId;
     },
 
+    // 强制腾出一个空缺（抢岗位用）
+    forceVacancy(targetRank) {
+        const allPositions = PositionDB.flattenRank(targetRank, GameState.playerLocation || '');
+        for (const pos of allPositions) {
+            const key = targetRank + '::' + pos.name;
+            if (this.occupied[key]) {
+                delete this.occupied[key];
+                return true;
+            }
+        }
+        return false; // 已经是全空的
+    },
+
+    // NPC竞岗：返回成功拿到岗位的NPC（如果有竞争）
+    npcCompeteForVacancy(targetRank) {
+        const vacants = this.getVacantPositions(targetRank);
+        if (vacants.length === 0) return null;
+        // 找同级别符合条件的NPC
+        const competitors = NPCPool.npcs.filter(n => {
+            if (n.retired) return false;
+            if (!n.rank || n.rank === '—') return false;
+            const nr = RankDB.getRankByName(n.rank);
+            const tr = RankDB.getRankByName(targetRank);
+            return nr && tr && nr.id === tr.id - 1; // 当前比目标低一级
+        });
+        if (competitors.length === 0) return null;
+        // 最优竞争者拿走最佳空缺
+        const bestNPC = competitors.sort((a,b) => {
+            const aAtt = RelationshipSystem.get(a.id);
+            const bAtt = RelationshipSystem.get(b.id);
+            return (b.competence + bAtt*0.3) - (a.competence + aAtt*0.3);
+        })[0];
+        const pos = vacants[0];
+        this.occupyPosition(targetRank, pos.name, bestNPC.id);
+        return { npcId: bestNPC.id, npcName: bestNPC.name, position: pos.name };
+    },
+
     // 月度维护：检查 NPC 退休/调离
     monthlyTick() {
         const events = [];

@@ -247,6 +247,18 @@ function endMonth() {
     const eventResult = EventSystem.monthlyTick();
     const grayResult = GrayZoneSystem.monthlyTick();
     const vacancyEvents = PositionRegistry.monthlyTick();
+    // NPC竞岗：新出现的空缺可能被NPC抢走
+    vacancyEvents.forEach(evt => {
+        if (evt.reason === '腾出空缺') {
+            const compResult = PositionRegistry.npcCompeteForVacancy(evt.rank);
+            if (compResult) {
+                EventSystem.eventHistory.push({
+                    id:'npc_compete_'+Date.now(), title:`${compResult.npcName}获得晋升`,
+                    body:`${compResult.npcName}成功竞得${compResult.position}岗位。`, options:[{label:'确认',effects:{}}], chosenOption:0, resolvedMonth:TimeSystem.totalMonths,
+                });
+            }
+        }
+    });
 
     // Log vacancy events
     vacancyEvents.forEach(evt => {
@@ -435,20 +447,8 @@ function doAction(actionType) {
                         if (act.budget) ResourceSystem.adjustBudget(act.budget);
                         if (act.cost) ResourceSystem.adjustBudget(-act.cost);
                         if (act.risk > 0) GrayZoneSystem.recordOperation(1, act.risk * 0.5);
-
-                        // bonus 文字效果
-                        if (act.bonus) {
-                            if (act.bonus.includes('项目进度+1')) ProjectSystem.activeProjects.forEach(p => p.progress++);
-                            if (act.bonus.includes('项目进度+2')) ProjectSystem.activeProjects.forEach(p => { p.progress += 2; });
-                            if (act.bonus.includes('灰色风险')) GrayZoneSystem.riskLevel = Math.max(0, (GrayZoneSystem.riskLevel||0) - 3);
-                            if (act.bonus.includes('灰色机会') && Math.random() < 0.35) {
-                                const biz = NPCPool.npcs.find(n => n.position.includes('老板')||n.position.includes('公司'));
-                                if (biz) EventSystem.pendingEvents.push({
-                                    id:'dept_gray_'+Date.now(), templateId:'dept_gray', title:'工作中的灰色机会', category:'灰色',
-                                    body:`${biz.name}借工作接触之机暗示有「感谢费」。`,
-                                    options:[{label:'拒绝',effects:{perf:1},risk:0},{label:'收下',effects:{budget:25,perf:-2},risk:2,grayLevel:1}]});
-                            }
-                        }
+                        // bonus效果
+                        execBonus(act.bonus, 1.0);
 
                         EventSystem.eventHistory.push({
                             id:'dept_'+Date.now(), title:act.label, body:`${dept}：${act.desc}`,
@@ -660,6 +660,74 @@ function doAction(actionType) {
     }
 }
 
+// ====== Bonus 执行系统（部门行动附加效果） ======
+const BONUS_TIERS = { '🔥':1.5, '⚡':1.0, '🌿':0.6, '🍃':0.3 };
+function execBonus(bonusText, tierMod) {
+    if (!bonusText) return;
+    const b = bonusText; const m = tierMod || 1.0;
+    if (b.includes('进度+2')) ProjectSystem.activeProjects.forEach(p => p.progress += Math.round(2*m));
+    else if (b.includes('进度+1')) ProjectSystem.activeProjects.forEach(p => p.progress += Math.round(1*m));
+    if (b.includes('灰色风险-3')) GrayZoneSystem.riskLevel = Math.max(0,(GrayZoneSystem.riskLevel||0)-Math.round(3*m));
+    else if (b.includes('灰色风险-2')) GrayZoneSystem.riskLevel = Math.max(0,(GrayZoneSystem.riskLevel||0)-Math.round(2*m));
+    if (b.includes('灰色机会极大')) triggerGrayOpp(0.55*m);
+    else if (b.includes('灰色机会')&&b.includes('高')) triggerGrayOpp(0.40*m);
+    else if (b.includes('灰色机会')&&!b.includes('低')) triggerGrayOpp(0.25*m);
+    else if (b.includes('灰色机会')) triggerGrayOpp(0.12*m);
+    if (b.includes('亲信人选')) triggerFindProtege(0.22*m);
+    if (b.includes('可培养')||b.includes('发现优秀')) triggerFindProtege(0.10*m);
+    if (b.includes('上级关注')||b.includes('表彰')||b.includes('获评')){ResourceSystem.adjustConnections(Math.round(1.5*m));ResourceSystem.adjustPerformance(Math.round(1*m));}
+    if (b.includes('信息权')||b.includes('核心权力')) ResourceSystem.adjustConnections(Math.round(3*m));
+}
+function triggerGrayOpp(chance) { if(Math.random()<chance){const biz=NPCPool.npcs.find(n=>n.position.includes('老板')||n.position.includes('公司'));if(biz)EventSystem.pendingEvents.push({id:'dg_'+Date.now(),templateId:'dept_gray',title:'部门灰色机会',category:'灰色',body:`${biz.name}借工作接触之机暗示有「感谢费」。`,options:[{label:'拒绝',effects:{perf:1},risk:0},{label:'收下',effects:{budget:20+Math.floor(Math.random()*30),perf:-2},risk:2,grayLevel:1}]});}}
+function triggerFindProtege(chance){if(Math.random()<chance){const subs=NPCPool.npcs.filter(n=>{const r=RankDB.getRankByName(n.rank);const pr=RankDB.getRankByName(GameState.playerRank);return r&&pr&&r.id<pr.id&&RelationshipSystem.get(n.id)>=20});if(subs.length>0){const s=subs[Math.floor(Math.random()*subs.length)];EventSystem.pendingEvents.push({id:'pf_'+Date.now(),templateId:'protege_find',title:'发现可培养之才',category:'关系',body:`${s.name}近期表现突出。是否纳入亲信培养名单？`,options:[{label:'纳入培养',effects:{conn:3},seed:{type:'alliance',window:[6,18],probability:55,data:{npcId:s.id,delta:15}}},{label:'继续观察',effects:{},risk:0}]});}}}
+
+// ====== 抢岗位机制（无空缺时在组织谈话中触发） ======
+function offerPositionGrab(topProfile, compScore, targetRank) {
+    const curRank = RankDB.getRankByName(GameState.playerRank);
+    const curPPI = 1; // placeholder
+    const curYears = TimeSystem.yearsAtCurrentRank;
+
+    const grabs = [
+        { label:'🏃 活动运作', desc:'请关键上级帮忙做工作，让现任提前退休或调离', cost:'人脉-25 财力-40', chance:60,
+            callback(){ if(ResourceSystem.connections>=25&&ResourceSystem.budget>=40){
+                ResourceSystem.adjustConnections(-25);ResourceSystem.adjustBudget(-40);
+                if(Math.random()*100<60){ PositionRegistry.forceVacancy(targetRank); alert('运作成功！岗位空缺已腾出。'); }
+                else { alert('运作失败。关系受损。'); const sups=NPCPool.npcs.filter(n=>RankDB.getRankByName(n.rank)?.id > (curRank?.id||0)); if(sups.length>0)RelationshipSystem.adjust(sups[0].id,-15); }
+                EventPanel.showNextPending ? finishInterviewRerun() : null;
+            }else{alert('人脉或财力不足！');}}},
+        { label:'📐 平级调动', desc:'换同级但PPI更高的空缺岗位', cost:'年限折半', chance:100,
+            callback(){ window.offerLateralTransfer(topProfile, compScore, 999); }},
+        { label:'⏳ 耐心等待', desc:'什么都不做，等自然变化', cost:'无', chance:10,
+            callback(){ alert('每月有10%概率出现空缺。继续推进时间即可。'); }},
+        { label:'🕵️ 举报现任', desc:'收集目标岗位现任的黑料匿名举报', cost:'人脉-15 财力-20 风险+30', chance:35,
+            callback(){ if(ResourceSystem.connections>=15&&ResourceSystem.budget>=20){
+                ResourceSystem.adjustConnections(-15);ResourceSystem.adjustBudget(-20);GrayZoneSystem.riskLevel+=30;
+                if(Math.random()*100<35){ PositionRegistry.forceVacancy(targetRank); alert('举报成功！现任被调查，岗位空缺。'); }
+                else { alert('举报失败！你被反查。'); GrayZoneSystem.riskLevel+=20; }
+            }else{alert('条件不足！');}}},
+    ];
+
+    document.getElementById('event-title').textContent = '🔓 无空缺——抢岗手段';
+    document.getElementById('event-body').textContent = `目标级别目前没有空缺岗位。你可以尝试以下方式争取：`;
+    document.getElementById('event-options').innerHTML = grabs.map(g => `
+        <div class="event-option" onclick="(${g.callback.toString()})()">
+            <b>${g.label}</b> <span style="color:var(--text-secondary);font-size:11px">成功率${g.chance}%</span>
+            <div style="font-size:11px;color:var(--text-secondary);margin-top:4px">${g.desc} · ${g.cost}</div>
+        </div>
+    `).join('');
+    document.getElementById('btn-confirm-choice').classList.add('hidden');
+    window._grabbing = true;
+}
+
+function finishInterviewRerun() {
+    // 抢岗成功后重新触发岗位检查
+    document.getElementById('event-modal').classList.add('hidden');
+    setTimeout(() => {
+        const promoCheck = PromotionSystem.checkEligibility();
+        if (promoCheck && promoCheck.eligible) startPromotionInterview(promoCheck);
+    }, 400);
+}
+
 function consumeAction(label) {
     Dashboard.actionPointsRemaining--;
     EventSystem.eventHistory.push({
@@ -759,6 +827,8 @@ function startPromotionInterview(promoCheck) {
             window._isLateralTransfer = false;
         } else if (action === 'lateralOffer') {
             offerLateralTransfer(profile, ppi, parseFloat(target.dataset.ceiling));
+        } else if (action === 'positionGrab') {
+            offerPositionGrab(profile, ppi, target.dataset.rank);
         } else if (action === 'selectLateral') {
             [...optionsEl.querySelectorAll('.event-option')].forEach(el => el.classList.remove('selected'));
             target.classList.add('selected');
@@ -841,9 +911,12 @@ function startPromotionInterview(promoCheck) {
         });
         if (unlocked.length === 0) {
             html += `<div style="border-top:1px solid var(--border);margin-top:12px;padding-top:12px">
-                <div style="color:var(--accent-orange);margin-bottom:8px">⚠ 综合评分（${compScore}）暂未解锁岗位。可申请平级调动：</div>
+                <div style="color:var(--accent-orange);margin-bottom:8px">⚠ 综合评分（${compScore}）暂未解锁岗位，或无空缺。可选操作：</div>
                 <div class="event-option" data-action="lateralOffer" data-profile="${topProfile}" data-ppi="${compScore}" data-ceiling="${ceiling}">
                     📌 申请平级调动（年限折半，换更高PPI岗位）
+                </div>
+                <div class="event-option" data-action="positionGrab" data-profile="${topProfile}" data-ppi="${compScore}" data-rank="${promoCheck.targetRank}">
+                    🔓 抢岗位（运作/举报/等待——主动腾出空缺）
                 </div>
             </div>`;
         }
