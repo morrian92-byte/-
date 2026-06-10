@@ -87,53 +87,49 @@ const Illustrations = {
 
     // 晋升成功页
     promotionCelebration() {
-        const stars = Array.from({length:20}, (_,i) => {
-            const x = 30 + Math.random() * 220;
-            const y = 10 + Math.random() * 60;
-            const size = 3 + Math.random() * 5;
-            const delay = Math.random() * 0.5;
-            return `<circle cx="${x}" cy="${y}" r="${size}" fill="${this._gold()}" opacity="0.8">
-                <animate attributeName="cy" from="${y-5}" to="${y+80}" dur="1.5s" begin="${delay}s" repeatCount="indefinite"/>
-                <animate attributeName="opacity" from="0.8" to="0" dur="1.5s" begin="${delay}s" repeatCount="indefinite"/>
+        const stars = Array.from({length:24}, (_,i) => {
+            const x = 20 + Math.random() * 240;
+            const y = 5 + Math.random() * 55;
+            const size = 2 + Math.random() * 4;
+            const delay = Math.random() * 0.6;
+            const colors = ['#d4a853','#c41e1a','#ff6b6b','#ffd700'];
+            const c = colors[Math.floor(Math.random()*colors.length)];
+            return `<circle cx="${x}" cy="${y}" r="${size}" fill="${c}" opacity="0.9">
+                <animate attributeName="cy" from="${y}" to="${y+90}" dur="2s" begin="${delay}s" repeatCount="indefinite"/>
+                <animate attributeName="opacity" from="0.9" to="0" dur="2s" begin="${delay}s" repeatCount="indefinite"/>
             </circle>`;
         }).join('');
 
-        return `<div style="text-align:center;padding:20px 0">
-            <svg viewBox="0 0 280 100" style="width:100%;max-width:280px;margin-bottom:12px">
-                <!-- 绶带 -->
-                <rect x="60" y="35" width="160" height="30" rx="4" fill="${this._red()}" opacity="0.15"/>
-                <!-- 勋章 -->
-                <circle cx="140" cy="45" r="25" fill="none" stroke="${this._gold()}" stroke-width="2.5"/>
-                <circle cx="140" cy="45" r="18" fill="${this._gold()}" opacity="0.2"/>
-                <polygon points="140,20 145,38 164,38 148,48 154,66 140,56 126,66 132,48 116,38 135,38" fill="${this._gold()}" opacity="0.8"/>
-                <!-- 飘带 -->
-                <path d="M55 50 Q30 70 44 75" fill="none" stroke="${this._red()}" stroke-width="3"/>
-                <path d="M225 50 Q250 70 236 75" fill="none" stroke="${this._red()}" stroke-width="3"/>
-                ${stars}
-            </svg>
-        </div>`;
+        return `<svg viewBox="0 0 280 100" style="width:100%;max-width:260px;display:block;margin:0 auto 8px">
+            <rect x="60" y="35" width="160" height="30" rx="4" fill="${this._red()}" opacity="0.12"/>
+            <circle cx="140" cy="45" r="28" fill="none" stroke="${this._gold()}" stroke-width="3"/>
+            <circle cx="140" cy="45" r="20" fill="${this._gold()}" opacity="0.15"/>
+            <polygon points="140,20 146,38 166,38 150,48 156,66 140,55 124,66 130,48 114,38 134,38" fill="${this._gold()}" opacity="0.9" stroke="${this._red()}" stroke-width="1"/>
+            <path d="M55 50 Q28 72 42 76" fill="none" stroke="${this._red()}" stroke-width="3.5"/>
+            <path d="M225 50 Q252 72 238 76" fill="none" stroke="${this._red()}" stroke-width="3.5"/>
+            ${stars}
+        </svg>`;
     },
 
     // 空状态 — 无项目
     emptyProjects() {
-        return `<svg viewBox="0 0 120 60" style="width:100%;opacity:0.3">
-            <rect x="30" y="25" width="60" height="35" rx="2" fill="${this._textLight()}" stroke="${this._textLight()}" stroke-width="1"/>
-            <rect x="35" y="30" width="50" height="4" rx="1" fill="${this._textLight()}"/>
-            <rect x="35" y="38" width="35" height="3" rx="1" fill="${this._textLight()}"/>
-            <rect x="35" y="44" width="42" height="3" rx="1" fill="${this._textLight()}"/>
-            <!-- 笔筒 -->
-            <rect x="95" y="18" width="8" height="18" rx="2" fill="${this._textLight()}"/>
+        return `<svg viewBox="0 0 120 60" width="100" height="50" style="display:block;margin:0 auto 4px;opacity:0.5">
+            <rect x="30" y="25" width="60" height="35" rx="2" fill="#e8e4dd" stroke="#ccc" stroke-width="1"/>
+            <rect x="35" y="30" width="50" height="4" rx="1" fill="#ccc"/>
+            <rect x="35" y="38" width="35" height="3" rx="1" fill="#d0d0d0"/>
+            <rect x="35" y="44" width="42" height="3" rx="1" fill="#d0d0d0"/>
+            <rect x="95" y="18" width="8" height="18" rx="2" fill="#ddd"/>
         </svg>`;
     },
 
     // 空状态 — 无事件
     emptyEvents() {
-        return `<svg viewBox="0 0 80 50" style="width:100%;opacity:0.3">
-            <rect x="28" y="22" width="24" height="16" rx="3" fill="${this._textLight()}" stroke="${this._textLight()}" stroke-width="1"/>
-            <rect x="30" y="25" width="18" height="3" rx="1" fill="${this._textLight()}"/>
-            <!-- 茶杯热气 -->
-            <path d="M36 19 Q38 14 34 12" fill="none" stroke="${this._textLight()}" stroke-width="1.5"/>
-            <path d="M41 20 Q43 15 39 13" fill="none" stroke="${this._textLight()}" stroke-width="1"/>
+        return `<svg viewBox="0 0 80 50" width="80" height="50" style="display:block;margin:0 auto 4px;opacity:0.5">
+            <ellipse cx="40" cy="36" rx="16" ry="4" fill="#e8e4dd"/>
+            <rect x="28" y="20" width="24" height="18" rx="3" fill="#e8e4dd" stroke="#ccc" stroke-width="1.5"/>
+            <path d="M52 24 Q56 26 52 31" fill="none" stroke="#bbb" stroke-width="2"/>
+            <path d="M31 23 L36 16 L49 23" fill="none" stroke="#ccc" stroke-width="1.5"/>
+            <path d="M34 29 Q39 25 45 29" fill="none" stroke="#ccc" stroke-width="1"/>
         </svg>`;
     },
 
