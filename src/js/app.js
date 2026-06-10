@@ -10,6 +10,13 @@ const GameState = {
     playerLocation: '江海省通阳市临溪县青石镇',
 };
 
+// 主题切换（预留——后续版本部门绑定激活）
+function switchTheme(theme) {
+    document.body.setAttribute('data-theme', theme);
+}
+// 默认红色
+switchTheme('red');
+
 // ====== 引导入口 ======
 function continueCareer() {
     const slots = Persistence.getAllSlots();

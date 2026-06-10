@@ -65,9 +65,13 @@ const Dashboard = {
         list.innerHTML = npcs.map(n => {
             const att = RelationshipSystem.get(n.id);
             const attInfo = RelationshipSystem.getAttitudeLabel(att);
+            const initial = n.name.charAt(0);
             return `<div class="npc-item" onclick="Dashboard.showNPCDetail('${n.id}')">
-                <div>
-                    <div>${n.name} <span style="font-size:11px;color:var(--text-secondary)">${n.position}</span></div>
+                <div style="display:flex;align-items:center;gap:8px">
+                    <span class="npc-avatar">${initial}</span>
+                    <div>
+                        <div>${n.name} <span style="font-size:11px;color:var(--text-secondary)">${n.position}</span></div>
+                    </div>
                 </div>
                 <span class="npc-attitude ${attInfo.cls}">${attInfo.label} ${att}</span>
             </div>`;
