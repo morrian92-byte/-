@@ -246,6 +246,7 @@ function endMonth() {
     const relChanges = RelationshipSystem.monthlyTick();
     const eventResult = EventSystem.monthlyTick();
     const grayResult = GrayZoneSystem.monthlyTick();
+    applyPersistentBonuses(); // 持久bonus（GDP基线等）
     const vacancyEvents = PositionRegistry.monthlyTick();
     // NPC竞岗：新出现的空缺可能被NPC抢走
     vacancyEvents.forEach(evt => {
@@ -660,26 +661,84 @@ function doAction(actionType) {
     }
 }
 
-// ====== Bonus 执行系统（部门行动附加效果） ======
-const BONUS_TIERS = { '🔥':1.5, '⚡':1.0, '🌿':0.6, '🍃':0.3 };
+// ====== Bonus 执行系统（部门行动附加效果·完整版） ======
+GameState.persistentBonuses = [];
 function execBonus(bonusText, tierMod) {
     if (!bonusText) return;
     const b = bonusText; const m = tierMod || 1.0;
-    if (b.includes('进度+2')) ProjectSystem.activeProjects.forEach(p => p.progress += Math.round(2*m));
-    else if (b.includes('进度+1')) ProjectSystem.activeProjects.forEach(p => p.progress += Math.round(1*m));
-    if (b.includes('灰色风险-3')) GrayZoneSystem.riskLevel = Math.max(0,(GrayZoneSystem.riskLevel||0)-Math.round(3*m));
-    else if (b.includes('灰色风险-2')) GrayZoneSystem.riskLevel = Math.max(0,(GrayZoneSystem.riskLevel||0)-Math.round(2*m));
+    const log = [];
+
+    // 1. 项目进度
+    if (b.includes('进度+2')) { const n=Math.round(2*m); ProjectSystem.activeProjects.forEach(p=>p.progress+=n); log.push('项目进度+'+n); }
+    else if (b.includes('进度+1')) { const n=Math.round(1*m); ProjectSystem.activeProjects.forEach(p=>p.progress+=n); log.push('项目进度+'+n); }
+
+    // 2. 灰色风险
+    if (b.includes('灰色风险-3')) { const n=Math.round(3*m); GrayZoneSystem.riskLevel=Math.max(0,(GrayZoneSystem.riskLevel||0)-n); log.push('灰色风险-'+n); }
+    else if (b.includes('灰色风险-2')) { const n=Math.round(2*m); GrayZoneSystem.riskLevel=Math.max(0,(GrayZoneSystem.riskLevel||0)-n); log.push('灰色风险-'+n); }
+
+    // 3. 灰色机会（4级）
     if (b.includes('灰色机会极大')) triggerGrayOpp(0.55*m);
     else if (b.includes('灰色机会')&&b.includes('高')) triggerGrayOpp(0.40*m);
-    else if (b.includes('灰色机会')&&!b.includes('低')) triggerGrayOpp(0.25*m);
+    else if (b.includes('灰色机会')&&!b.includes('低')&&!b.includes('微')) triggerGrayOpp(0.25*m);
     else if (b.includes('灰色机会')) triggerGrayOpp(0.12*m);
+
+    // 4. 亲信发现
     if (b.includes('亲信人选')) triggerFindProtege(0.22*m);
     if (b.includes('可培养')||b.includes('发现优秀')) triggerFindProtege(0.10*m);
-    if (b.includes('上级关注')||b.includes('表彰')||b.includes('获评')){ResourceSystem.adjustConnections(Math.round(1.5*m));ResourceSystem.adjustPerformance(Math.round(1*m));}
-    if (b.includes('信息权')||b.includes('核心权力')) ResourceSystem.adjustConnections(Math.round(3*m));
+
+    // 5. 上级关注/表彰
+    if (b.includes('上级关注')||b.includes('表彰')||b.includes('获评')||b.includes('上级采纳')){
+        ResourceSystem.adjustConnections(Math.round(2*m)); ResourceSystem.adjustPerformance(Math.round(1*m)); log.push('上级关注');}
+
+    // 6. 信息权/核心
+    if (b.includes('信息权')||b.includes('核心权力')){ ResourceSystem.adjustConnections(Math.round(3*m)); log.push('信息权提升');}
+
+    // 7. 降低安全/事故/事件概率（一次性财力减负 or 隐性 buff）
+    if (b.includes('事故概率')||b.includes('安全风险')||b.includes('安全事件')){ ResourceSystem.adjustBudget(Math.round(5*m)); log.push('安全加固·省下应急开支');}
+    if (b.includes('公卫事件')||b.includes('疫情')){ ResourceSystem.adjustBudget(Math.round(3*m)); log.push('公卫防控·减少突发开支');}
+    if (b.includes('群体事件')){ ResourceSystem.adjustBudget(Math.round(5*m)); log.push('维稳见效·省下维稳开支');}
+
+    // 8. 民生/信访指标
+    if (b.includes('民生指标')||b.includes('民生考核')){ ResourceSystem.adjustPerformance(Math.round(2*m)); log.push('民生指标↑');}
+    if (b.includes('信访率')||b.includes('信访量')||b.includes('群体事件概率')){ ResourceSystem.adjustPerformance(Math.round(1*m)); log.push('信访量↓');}
+
+    // 9. GDP 基线（持久 bonus）
+    if (b.includes('GDP基线')||b.includes('长期提升')){
+        const dur = b.includes('12')?12:6; const val=Math.round(1*m);
+        GameState.persistentBonuses.push({type:'gdp',value:val,remaining:dur});
+        log.push('GDP基线+'+val+'（持续'+dur+'月）');
+    }
+
+    // 10. 发现漏洞/线索（可选择性处理）
+    if (b.includes('发现漏洞')||b.includes('发现疑点')||b.includes('发现账务')){ triggerDiscoveryEvent(); log.push('发现问题线索');}
+    if (b.includes('可选择性处置')||b.includes('可选择性报告')||b.includes('可选择上报')){ triggerDiscoveryEvent(); log.push('选择性处理机会');}
+
+    // 11. 推荐上位/安排自己人
+    if (b.includes('推荐上位')||b.includes('安排自己人')||b.includes('有权推荐')){
+        ResourceSystem.adjustConnections(Math.round(4*m)); log.push('推荐权力行使');}
+
+    // 12. 微bonus也要有落点
+    if (b.includes('小幅buff')||b.includes('微幅')){ ResourceSystem.adjustPerformance(Math.round(0.5*m)); log.push('小幅增益');}
+    if (b.includes('口碑')||b.includes('群众')){ ResourceSystem.adjustConnections(Math.round(1*m)); log.push('口碑提升');}
+
+    // 记录bonus日志
+    if (log.length > 0) {
+        EventSystem.eventHistory.push({id:'bonus_'+Date.now(),title:'✨ 附加效果',body:log.join(' · '),options:[{label:'确认',effects:{}}],chosenOption:0,resolvedMonth:TimeSystem.totalMonths});
+    }
 }
-function triggerGrayOpp(chance) { if(Math.random()<chance){const biz=NPCPool.npcs.find(n=>n.position.includes('老板')||n.position.includes('公司'));if(biz)EventSystem.pendingEvents.push({id:'dg_'+Date.now(),templateId:'dept_gray',title:'部门灰色机会',category:'灰色',body:`${biz.name}借工作接触之机暗示有「感谢费」。`,options:[{label:'拒绝',effects:{perf:1},risk:0},{label:'收下',effects:{budget:20+Math.floor(Math.random()*30),perf:-2},risk:2,grayLevel:1}]});}}
-function triggerFindProtege(chance){if(Math.random()<chance){const subs=NPCPool.npcs.filter(n=>{const r=RankDB.getRankByName(n.rank);const pr=RankDB.getRankByName(GameState.playerRank);return r&&pr&&r.id<pr.id&&RelationshipSystem.get(n.id)>=20});if(subs.length>0){const s=subs[Math.floor(Math.random()*subs.length)];EventSystem.pendingEvents.push({id:'pf_'+Date.now(),templateId:'protege_find',title:'发现可培养之才',category:'关系',body:`${s.name}近期表现突出。是否纳入亲信培养名单？`,options:[{label:'纳入培养',effects:{conn:3},seed:{type:'alliance',window:[6,18],probability:55,data:{npcId:s.id,delta:15}}},{label:'继续观察',effects:{},risk:0}]});}}}
+
+// 持久 bonus 月末结算
+function applyPersistentBonuses() {
+    GameState.persistentBonuses = (GameState.persistentBonuses||[]).filter(pb => {
+        if (pb.type==='gdp'){ ResourceSystem.adjustPerformance(pb.value*0.3); ResourceSystem.adjustBudget(pb.value*2); }
+        pb.remaining--;
+        return pb.remaining > 0;
+    });
+}
+
+function triggerGrayOpp(chance) { if(Math.random()<chance){const biz=NPCPool.npcs.find(n=>n.position.includes('老板')||n.position.includes('公司'));if(biz)EventSystem.pendingEvents.push({id:'dg_'+Date.now(),title:'部门灰色机会',category:'灰色',body:`${biz.name}借工作接触之机暗示有「感谢费」。`,options:[{label:'拒绝',effects:{perf:1},risk:0},{label:'收下',effects:{budget:20+Math.floor(Math.random()*30),perf:-2},risk:2,grayLevel:1}]});}}
+function triggerFindProtege(chance){if(Math.random()<chance){const subs=NPCPool.npcs.filter(n=>{const r=RankDB.getRankByName(n.rank);const pr=RankDB.getRankByName(GameState.playerRank);return r&&pr&&r.id<pr.id&&RelationshipSystem.get(n.id)>=20});if(subs.length>0){const s=subs[Math.floor(Math.random()*subs.length)];EventSystem.pendingEvents.push({id:'pf_'+Date.now(),title:'发现可培养之才',category:'关系',body:`${s.name}近期表现突出。是否纳入亲信培养名单？`,options:[{label:'纳入培养',effects:{conn:3},seed:{type:'alliance',window:[6,18],probability:55,data:{npcId:s.id,delta:15}}},{label:'继续观察',effects:{},risk:0}]});}}}
+function triggerDiscoveryEvent(){if(Math.random()<0.4){EventSystem.pendingEvents.push({id:'disc_'+Date.now(),title:'发现问题',category:'灰色',body:'在工作检查中你发现了一处财务/管理漏洞。你可以选择上报或压下。',options:[{label:'上报——政绩+3',effects:{perf:3},risk:0},{label:'压下——暗示对方表示',effects:{budget:30,perf:-1},risk:3,grayLevel:2}]});}}
 
 // ====== 抢岗位机制（无空缺时在组织谈话中触发） ======
 function offerPositionGrab(topProfile, compScore, targetRank) {
