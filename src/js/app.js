@@ -246,7 +246,8 @@ function endMonth() {
     const relChanges = RelationshipSystem.monthlyTick();
     const eventResult = EventSystem.monthlyTick();
     const grayResult = GrayZoneSystem.monthlyTick();
-    applyPersistentBonuses(); // 持久bonus（GDP基线等）
+    applyPersistentBonuses(); // 持久bonus
+    monthlyEnergyTick(); // 精力结算
     const vacancyEvents = PositionRegistry.monthlyTick();
     // NPC竞岗：新出现的空缺可能被NPC抢走
     vacancyEvents.forEach(evt => {
@@ -365,6 +366,16 @@ function endMonth() {
     if (endReason) {
         setTimeout(() => showLifeSummary(endReason), 500);
         return; // 终结：不触发晋升和事件
+    }
+
+    // 破格提拔检查（每月都可能触发，但概率极低）
+    const exceptionCheck = PromotionSystem.checkExceptionPromotion();
+    if (exceptionCheck && exceptionCheck.eligible) {
+        EventSystem.eventHistory.push({id:'exception_'+Date.now(),title:'🌟 破格提拔机会！',
+            body:`你的卓越表现引起了上级注意！破格概率${exceptionCheck.chance}%，目标：${exceptionCheck.targetRank}`,
+            options:[{label:'确认',effects:{}}],chosenOption:0,resolvedMonth:TimeSystem.totalMonths});
+        setTimeout(() => startPromotionInterview({...exceptionCheck, targetRank:exceptionCheck.targetRank, isException:true}), 300);
+        return;
     }
 
     // 晋升检查
@@ -664,7 +675,17 @@ function doAction(actionType) {
     }
 }
 
-// ====== Bonus 执行系统（部门行动附加效果·完整版） ======
+// ====== 健康精力系统 ======
+GameState.energy = 100;
+function monthlyEnergyTick() {
+    GameState.energy = Math.min(100,(GameState.energy||100)+5);
+    const grayThisMonth=GrayZoneSystem.operationHistory.filter(o=>o.month===TimeSystem.totalMonths).length;
+    GameState.energy=Math.max(0,GameState.energy-grayThisMonth*8);
+    if(GameState.energy<30&&GameState.energy>0){EventSystem.eventHistory.push({id:'elow_'+Date.now(),title:'⚠ 精力不足',body:`精力：${GameState.energy}。减少灰色操作以恢复。`,options:[{label:'确认',effects:{}}],chosenOption:0,resolvedMonth:TimeSystem.totalMonths});}
+    if(GameState.energy<=0){GameState.energy=20;EventSystem.pendingEvents.push({id:'ecrash_'+Date.now(),title:'🏥 健康告急',category:'危机',body:'身体亮红灯。立即休养？',options:[{label:'休养·本月停工',effects:{perf:-3},risk:0},{label:'硬撑',effects:{perf:1},risk:3,seed:{type:'exposure',window:[1,3],probability:55,data:{}}}]});}
+}
+
+// ====== Bonus 执行系统 ======
 GameState.persistentBonuses = [];
 function execBonus(bonusText, tierMod) {
     if (!bonusText) return;
