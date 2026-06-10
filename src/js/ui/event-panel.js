@@ -22,11 +22,12 @@ const EventPanel = {
                 ? `<div class="risk">风险：${'★'.repeat(opt.risk)}${'☆'.repeat(4-opt.risk)}</div>`
                 : '';
             const effectsText = opt.effects
-                ? Object.entries(opt.effects).map(([k,v]) => {
+                ? Object.entries(opt.effects).filter(([,v]) => typeof v === 'number').map(([k,v]) => {
                     const sign = v > 0 ? '+' : '';
                     const label = { perf:'政绩', conn:'人脉', budget:'财力' }[k] || k;
                     return `${label} ${sign}${v}`;
                 }).join(' · ')
+                    + (opt.effects.npcEffects ? ` · 影响${Object.keys(opt.effects.npcEffects).length}人` : '')
                 : '';
 
             return `<div class="${cls}" onclick="EventPanel.selectOption(${i})" data-index="${i}">

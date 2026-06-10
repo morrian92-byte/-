@@ -525,12 +525,10 @@ const EventSystem = {
 
             if (triggered) {
                 triggeredSeeds.push(seed);
-                // offense类型：被得罪的人态度下降
-                if (seed.type === 'offense' && seed.data.npcId) {
+                if (seed.type === 'offense' && seed.data && seed.data.npcId) {
                     RelationshipSystem.adjust(seed.data.npcId, seed.data.delta || -15);
                 }
-                // alliance类型：盟友态度提升
-                if (seed.type === 'alliance' && seed.data.npcId) {
+                if (seed.type === 'alliance' && seed.data && seed.data.npcId) {
                     RelationshipSystem.adjust(seed.data.npcId, seed.data.delta || 10);
                 }
                 return false;
