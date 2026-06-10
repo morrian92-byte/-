@@ -332,18 +332,32 @@ function endMonth() {
     Dashboard.selectedActions = [];
     Dashboard.refresh();
 
-    // Check promotion at year-end or term-end
+    // Check career end — 退休 / 窗口关闭 / 灰产暴露
+    let endReason = null;
+    if (TimeSystem.state === 'CAREER_END') {
+        endReason = '退休';
+    } else {
+        const curRank = RankDB.getRankByName(GameState.playerRank);
+        if (curRank && RankDB.isWindowClosed(curRank.id, TimeSystem.playerAge)) {
+            endReason = '窗口关闭';
+            TimeSystem.state = 'CAREER_END';
+        }
+    }
+    // 灰产暴露次数≥3 → 强制终结
+    if (!endReason && GrayZoneSystem.exposureCount >= 3) {
+        endReason = '被查处';
+        TimeSystem.state = 'CAREER_END';
+    }
+
+    if (endReason) {
+        setTimeout(() => showLifeSummary(endReason), 500);
+        return; // 终结：不触发晋升和事件
+    }
+
+    // 晋升检查
     const promoCheck = PromotionSystem.checkEligibility();
     const willPromote = promoCheck && promoCheck.eligible;
-
-    if (willPromote) {
-        setTimeout(() => startPromotionInterview(promoCheck), 200);
-    }
-
-    // Check career end
-    if (TimeSystem.state === 'CAREER_END') {
-        alert(`🎉 仕途终结！你在${TimeSystem.dateString}退休，最终职级：${GameState.playerRank}。\n查看完整生涯回顾请点击仕途档案。`);
-    }
+    if (willPromote) { setTimeout(() => startPromotionInterview(promoCheck), 200); }
 
     // Only show events if NOT promoting (avoid modal conflict)
     if (!willPromote && EventSystem.pendingEvents.length > 0) {
@@ -980,6 +994,151 @@ function cleanupPromoState() {
     window._promoData = null;
     window._isLateralTransfer = false;
     document.getElementById('btn-confirm-choice').textContent = '确认选择';
+}
+
+// ====== 人生总结 ======
+function showLifeSummary(endReason) {
+    const player = GameState;
+    const startAge = 22;
+    const endAge = TimeSystem.playerAge;
+    const years = endAge - startAge;
+    const rank = player.playerRank;
+    const pos = player.playerPosition || '';
+    const loc = player.playerLocation || '';
+    const exam = player.examScore || 60;
+    const profile = player.playerProfile || '综合';
+
+    // 统计数据
+    const projectsDone = ProjectSystem.completedHistory.length;
+    const eventsHandled = EventSystem.eventHistory.length;
+    const grayOps = GrayZoneSystem.operationHistory.length;
+    const exposures = GrayZoneSystem.exposureCount;
+    const maxPerf = ResourceSystem.performance; // approximate peak
+    const maxConn = ResourceSystem.connections;
+
+    // 贵人/对手
+    let bestNPC = null, worstNPC = null;
+    let bestAtt = -999, worstAtt = 999;
+    NPCPool.npcs.forEach(n => {
+        const att = RelationshipSystem.get(n.id);
+        if (att > bestAtt) { bestAtt = att; bestNPC = n; }
+        if (att < worstAtt) { worstAtt = att; worstNPC = n; }
+    });
+
+    // 入口段
+    const entryText = (() => {
+        const locShort = (loc || '').replace(/^.+省/, '').replace(/^.+?市/, '');
+        if (exam >= 90) return `${startAge}岁那年，你以${exam}分的优异成绩考入了公务员队伍，被分配到了${locShort || '基层'}。彼时的你意气风发，前途似乎一片光明。`;
+        if (exam >= 75) return `${startAge}岁的你以${exam}分考公上岸，被分配到了${locShort || '基层'}。不算最好，但也不差——你很满意这个起点。`;
+        if (exam >= 60) return `${startAge}岁那年，你以刚好过线的${exam}分考入了公务员队伍，被分配到了${locShort || '偏远乡镇'}。从最基层开始，你深知自己比别人要多付出几分。`;
+        return `${startAge}岁的你以${exam}分「努力」考入，被分到了最偏远的乡镇。有人说这是最差的去处，但你觉得——只要进了门，就有机会。`;
+    })();
+
+    // 爬坡段
+    const climbText = (() => {
+        const rankId = RankDB.getRankByName(rank)?.id || 1;
+        if (rankId <= 2) return `你在基层度过了全部${years}年的仕途。从办事员到副股级，你走得不算远，但你经手的每一个项目、处理的每一个事件，都留下了你的印记。`;
+        if (rankId <= 4) return `你在仕途上走到了${rank}。${projectsDone}个项目的历练、${eventsHandled}次事件的抉择，让你从青涩的科员成长为能独当一面的基层干部。`;
+        if (rankId <= 7) return `你用${years}年的时间走到了${rank}。${projectsDone > 10 ? '超过十个项目' : '若干个项目'}在你的推动下落地，你在这片土地上留下了自己的名字。${eventsHandled > 30 ? '无数次的官场抉择' : '每一次关键选择'}都塑造了今天的你。`;
+        return `你用${years}年的奋斗走到了${rank}。从基层科员到领导岗位，你的每一步都在权力的阶梯上留下了印记。${projectsDone}个项目、${eventsHandled}次事件——这些数字背后是你真实的人生。`;
+    })();
+
+    // 十字路口段
+    const crossroadText = (() => {
+        if (grayOps === 0) return `在你整个仕途中，你没有碰过一次灰色操作。不是没有机会——是你每次都选择了把手缩回来。在某种意义上，这比冒险更需要勇气。`;
+        if (grayOps <= 2 && exposures === 0) return `你曾${grayOps}次在灰色地带的边缘试探过，但每次都全身而退。你觉得自己把握住了分寸——也许你确实做到了。`;
+        if (exposures >= 1 && endReason !== '被查处') return `你曾${grayOps}次触碰灰色地带，其中${exposures}次差点出事。这些经历让你在后来的日子里愈发谨慎，也让你更早地看清了权力的两面性。`;
+        if (endReason === '被查处') return `你曾${grayOps}次在灰色地带操作。第${exposures}次暴露后，一切都结束了。你曾经想过这个结局，但没想到来得这么快——也许这就是权力的代价。`;
+        return `在灰色与清白之间，你有自己的尺度。`;
+    })();
+
+    // 人际关系段
+    const relationText = (() => {
+        let text = '';
+        if (bestNPC && bestAtt > 40) text += `${bestNPC.name}是你仕途中的贵人。${['他多次在关键时刻帮你说过话','他给了你最关键的提携','他在你最困难的时候没有放弃你'][Math.floor(Math.random()*3)]}。`;
+        if (worstNPC && worstAtt < -30) text += `${worstNPC.name}是你的对手。${['你们之间的矛盾从第一次会面就埋下了','他曾在背后捅过你一刀','你们代表了不同的利益，注定无法站在同一边'][Math.floor(Math.random()*3)]}。`;
+        if (!text) text += '你的官场关系网不算宽广，但胜在稳当。没有树敌太多，也没有太多可以依赖的人——这是你的选择。';
+        return text;
+    })();
+
+    // 终点段
+    const endText = (() => {
+        if (endReason === '退休') return `${endAge}岁这一年，你正式办理了退休手续。从${startAge}岁入行到${endAge}岁退休，${years}年的仕途画上了句号。`;
+        if (endReason === '窗口关闭') return `${endAge}岁这一年，你到达了${rank}的晋升窗口上限。组织不再考虑你继续晋升。你的仕途在${rank}定格。`;
+        if (endReason === '被查处') return `${endAge}岁这一年，你的灰色操作暴露了。纪委介入调查，你的仕途以被查处告终。`;
+        if (endReason === '辞职') return `${endAge}岁这一年，你选择了主动离开。不是被逼无奈，是你觉得——该换个活法了。`;
+        return `${endAge}岁这一年，你的仕途画上了句号。`;
+    })();
+
+    // 余生段
+    const afterText = (() => {
+        const happiness = grayOps === 0 ? 5 : exposures === 0 ? 4 : exposures >= 2 ? 1 : 3;
+        const wealth = rank.includes('部') || rank.includes('国') ? 4 : grayOps > 3 ? 5 : grayOps > 0 ? 3 : 2;
+        const reputation = exposures > 0 ? 1 : projectsDone > 10 ? 5 : projectsDone > 3 ? 4 : 3;
+        const power = rank.includes('局') || rank.includes('部') || rank.includes('国') ? (endReason === '被查处' ? 1 : 4) : rank.includes('处') ? 3 : 2;
+
+        let life = '';
+        if (endReason === '退休') life += '退休后，你回到了生活本身。';
+        else if (endReason === '窗口关闭') life += '窗口关闭后，你在原岗位又待了几年，然后平调到了清闲部门。退休后，你过上了普通人的生活。';
+        else if (endReason === '被查处') life += '被查处后，你经历了人生最黑暗的一段日子。重新站起来之后，你选择了一个完全不同的活法。';
+        else life += '辞职之后，你的人生翻开了新的篇章。';
+
+        life += ` 幸福${'★'.repeat(happiness)}${'☆'.repeat(5-happiness)} · 财富${'★'.repeat(wealth)}${'☆'.repeat(5-wealth)} · 声望${'★'.repeat(reputation)}${'☆'.repeat(5-reputation)} · 权力${'★'.repeat(power)}${'☆'.repeat(5-power)}`;
+
+        if (happiness >= 4) life += '\n你是一个快乐的人。不是因为你有多少钱或多大的权，而是因为你做的事情让你晚上能睡着觉。';
+        else if (happiness <= 2) life += '\n你的人生有许多遗憾。如果重来一次，你也许会做出不同的选择。';
+        if (wealth >= 4) life += '\n你的财富远超常人。有人羡慕你，也有人质疑你——但你不在乎。';
+        if (reputation >= 4) life += '\n你的名声不错。老同事提起你，都说你是个实在人。';
+        if (power <= 2) life += '\n权力从来不是你的终点。你只是在自己的岗位上，做了自己该做的事。';
+
+        return life;
+    })();
+
+    // 尾声
+    const codaText = (() => {
+        const phrases = [
+            '一个人的仕途，说到底，不过是一段与权力共舞的人生。',
+            '从科员到' + rank + '，这一路走来，你得到了什么，又失去了什么——只有你自己知道。',
+            '权力是一场没有终点的马拉松。你跑到了自己的终点，这就够了。',
+            '也许有人比你走得更远，但没有人比你更了解你自己的选择。',
+        ];
+        return phrases[Math.floor(Math.random() * phrases.length)];
+    })();
+
+    const summary = [
+        entryText,
+        '',
+        climbText,
+        '',
+        crossroadText,
+        '',
+        relationText,
+        '',
+        endText,
+        '',
+        afterText,
+        '',
+        '——',
+        codaText,
+    ].join('\n');
+
+    // 弹窗展示
+    const overlay = document.createElement('div');
+    overlay.className = 'celebration-overlay';
+    overlay.innerHTML = `
+        <div class="celebration-card" style="max-width:500px;max-height:85vh;overflow-y:auto;text-align:left;line-height:2;font-size:14px;padding:28px 32px" onclick="event.stopPropagation()">
+            <div style="text-align:center;margin-bottom:16px">
+                ${Illustrations.seal('仕途', 56)}
+                <h2 style="color:var(--primary);margin:8px 0;font-size:20px">${GameState.playerName} · 政治生涯总结</h2>
+                <p style="color:var(--text-secondary);font-size:12px">${startAge}岁入职 → ${endAge}岁${endReason} · ${rank} · ${years}年</p>
+            </div>
+            <div style="white-space:pre-line;color:var(--text)">${summary}</div>
+            <div style="text-align:center;margin-top:20px">
+                <button class="btn-primary" onclick="this.closest('.celebration-overlay').remove();window.location.reload()">结束 · 重新开始</button>
+            </div>
+        </div>`;
+    overlay.onclick = function() {};
+    document.body.appendChild(overlay);
 }
 
 // ====== 存档/读档 ======

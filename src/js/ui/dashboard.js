@@ -172,12 +172,21 @@ const Dashboard = {
         const minPPI = rankPositions.length > 0 ? Math.min(...rankPositions.map(p => p.ppi)) : 0;
 
         const hasVac = PositionRegistry.hasVacancy(nextRank.name);
+        const windowLeft = RankDB.windowYearsRemaining(currentRank.id, TimeSystem.playerAge);
+        const ageOk = TimeSystem.playerAge >= nextRank.minAge;
         const checks = [
             { label: `年限达标：${yearsInRank}/${reqs.minYears}年`, ok: yearsInRank >= reqs.minYears },
             { label: `政绩过线：${perf}/${reqs.perfLine}`, ok: perf >= reqs.perfLine },
             { label: `上级支持：${maxAtt}/${reqs.attLine}`, ok: maxAtt >= reqs.attLine },
             { label: `职位空缺：${hasVac ? '有空缺' : '暂无空缺'}`, ok: hasVac },
         ];
+        if (nextRank.minAge > 0 && !ageOk) {
+            checks.push({ label: `年龄限制：${TimeSystem.playerAge}/${nextRank.minAge}岁`, ok: false });
+        }
+        // 窗口警告
+        if (windowLeft <= 3 && windowLeft >= 0) {
+            checks.push({ label: `⚠ 晋升窗口：仅剩 ${windowLeft} 年`, ok: true });
+        }
         if (reqs.partyReq) {
             checks.push({
                 label: `党委身份：${GameState.playerPartyPosition || '无'}/${reqs.partyReq}`,
