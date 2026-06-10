@@ -2,10 +2,11 @@
 // NPC 态度管理，-100 到 +100
 
 const RelationshipSystem = {
-    attitudes: {}, // npc_id -> attitude value
+    attitudes: {}, // npc_id → towardPlayer
+    playerToward: {}, // npc_id → 玩家对NPC的态度 (VS)
 
     init() {
-        this.attitudes = {};
+        this.attitudes = {}; this.playerToward = {};
         NPCPool.npcs.forEach(npc => {
             // Initial attitudes based on relative rank
             const rank = RankDB.getRankByName(npc.rank);
@@ -97,6 +98,6 @@ const RelationshipSystem = {
         return Math.round(sum / count);
     },
 
-    getSaveState() { return { attitudes: {...this.attitudes} }; },
-    loadSaveState(data) { this.attitudes = data.attitudes || {}; },
+    getSaveState() { return { attitudes:{...this.attitudes}, playerToward:{...this.playerToward} }; },
+    loadSaveState(data) { this.attitudes=data.attitudes||{}; this.playerToward=data.playerToward||{}; },
 };

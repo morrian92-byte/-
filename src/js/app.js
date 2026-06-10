@@ -11,12 +11,21 @@ const GameState = {
     proteges: [], // 亲信列表 [npc_id, ...]
 };
 
-// 主题切换（预留——后续版本部门绑定激活）
-function switchTheme(theme) {
-    document.body.setAttribute('data-theme', theme);
-}
-// 默认红色
+// 主题切换
+function switchTheme(theme){document.body.setAttribute('data-theme',theme);}
 switchTheme('red');
+
+// 地名随级别切换
+function getLocationForRank(rankName){
+    const rank=RankDB.getRankByName(rankName);if(!rank)return GameState.playerLocation||'';
+    const loc=GameState.playerLocation||'江海省通阳市临溪县青石镇';
+    const parts=loc.match(/^(.+省)(.+市)(.+[县区])(.+[镇乡街道])/);
+    if(!parts)return loc;
+    if(rank.id>=8)return parts[1]; // 厅级→省级
+    if(rank.id>=6)return parts[1]+parts[2]; // 处级→市级
+    if(rank.id>=4)return parts[1]+parts[2]+parts[3]; // 科级→县级
+    return loc; // 股级→乡镇
+}
 
 // ====== 引导入口 ======
 function continueCareer() {

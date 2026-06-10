@@ -81,9 +81,9 @@ const PromotionSystem = {
         if (!result || !result.eligible) return { success: false, reason: '不满足晋升条件' };
 
         const oldRank = GameState.playerRank;
-        // 占据新岗位
         PositionRegistry.occupyPosition(result.targetRank, GameState.playerPosition || '', 'player');
         GameState.playerRank = result.targetRank;
+        GameState.playerLocation = getLocationForRank(result.targetRank);
         TimeSystem.onPromotion();
 
         ResourceSystem.adjustPerformance(3);
