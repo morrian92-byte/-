@@ -7,6 +7,7 @@ const Dashboard = {
     refresh() {
         this.updateTopBar();
         this.updateResources();
+        this.updateWindow();
         this.updateProjects();
         this.updatePromotion();
         this.updateNPCs();
@@ -41,6 +42,46 @@ const Dashboard = {
         const statusEl = document.getElementById('status-performance');
         statusEl.textContent = status.label;
         statusEl.className = 'res-status ' + status.cls;
+    },
+
+    updateWindow() {
+        const curRank = RankDB.getRankByName(GameState.playerRank);
+        if (!curRank) return;
+        const age = TimeSystem.playerAge;
+        const nextRank = RankDB.getNextRank(curRank.id);
+        const hasNext = nextRank && nextRank.windowClose > 0;
+        const windowLeft = hasNext ? RankDB.windowYearsRemaining(curRank.id, age) : 99;
+        const barPct = hasNext ? Math.min(100, Math.round(((curRank.windowClose - age) / (curRank.windowClose - curRank.minAge + 1)) * 100)) : 100;
+
+        let statusColor, statusLabel;
+        if (!hasNext) {
+            statusColor = 'var(--green)'; statusLabel = '无年龄限制';
+        } else if (windowLeft <= 0) {
+            statusColor = 'var(--red)'; statusLabel = '🔒 已关闭';
+        } else if (windowLeft <= 3) {
+            statusColor = 'var(--orange)'; statusLabel = '⚠ 仅剩' + windowLeft + '年';
+        } else if (windowLeft <= 6) {
+            statusColor = 'var(--gold,#d4a853)'; statusLabel = '剩余' + windowLeft + '年';
+        } else {
+            statusColor = 'var(--green)'; statusLabel = '剩余' + windowLeft + '年';
+        }
+
+        document.getElementById('window-content').innerHTML = `
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
+                <span style="font-size:12px;color:var(--text-secondary)">当前 ${curRank.name} · ${age}岁</span>
+                <span style="font-size:12px;color:${statusColor};font-weight:600">${statusLabel}</span>
+            </div>
+            <div style="height:6px;background:#eee;border-radius:3px;overflow:hidden">
+                <div style="height:100%;width:${barPct}%;background:${statusColor};border-radius:3px;transition:width 0.5s"></div>
+            </div>
+            ${hasNext ? `
+            <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-light);margin-top:3px">
+                <span>${curRank.minAge}岁起</span>
+                <span>关闭 ${curRank.windowClose}岁</span>
+            </div>` : ''}
+            ${nextRank && nextRank.minAge > age ? `
+            <div style="font-size:11px;color:var(--orange);margin-top:4px">⚠ 下一级需满${nextRank.minAge}岁</div>` : ''}
+        `;
     },
 
     updateProjects() {
