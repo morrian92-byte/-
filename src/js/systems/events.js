@@ -450,11 +450,11 @@ const EventSystem = {
         ]},
         { id:'middleman_offer', title:'有人想牵线', category:'关系',
             trigger:()=>!!NPCPool.npcs.find(n=>RelationshipSystem.get(n.id)>=50)&&Math.random()<0.25,
-            body:()=>{const friend=NPCPool.npcs.find(n=>RelationshipSystem.get(n.id)>=50);const target=NPCPool.npcs.find(n=>n.id!==friend?.id&&RelationshipSystem.get(n.id)<10);return`${friend?friend.name:'一位关系不错的同僚'}私下找到你，说他认识${target?target.name:'一位你不太熟的同级的干部'}，可以帮你们牵线搭桥。有时候，中间人比自己出面更有效。`;},
-            options:[
+            body:()=>{const friend=NPCPool.npcs.find(n=>RelationshipSystem.get(n.id)>=50);const target=NPCPool.npcs.find(n=>n.id!==friend?.id&&RelationshipSystem.get(n.id)<10);return`${friend?friend.name:'一位关系不错的同僚'}私下找到你，说他认识${target?target.name:'一位你不太熟的同级的干部'}，可以帮你们牵线搭桥。`;},
+            options:()=>{const friend=NPCPool.npcs.find(n=>RelationshipSystem.get(n.id)>=50);const target=NPCPool.npcs.find(n=>n.id!==friend?.id&&RelationshipSystem.get(n.id)<10);return[
                 {label:'请他帮忙牵线',effects:{conn:2,budget:-5},risk:0,seed:{type:'alliance',window:[2,6],probability:55,data:{npcId:target?.id,delta:15}}},
                 {label:'表示感谢但不麻烦他',effects:{conn:1},risk:0},
-        ]},
+        ];}},
     ],
 
     init() {

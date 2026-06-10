@@ -219,7 +219,8 @@ function initGame(opts = {}) {
     ResourceSystem.init();
     RelationshipSystem.init();
     ProjectSystem.init();
-    EventSystem.init();
+    if(typeof EventSystem!=='undefined') EventSystem.init();
+    else console.error('EventSystem not loaded!');
     EvaluationSystem.init();
     GrayZoneSystem.init();
     PromotionSystem.init ? PromotionSystem.init() : null;
