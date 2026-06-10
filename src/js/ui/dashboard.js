@@ -171,11 +171,12 @@ const Dashboard = {
         const maxPPI = rankPositions.length > 0 ? Math.max(...rankPositions.map(p => p.ppi)) : 0;
         const minPPI = rankPositions.length > 0 ? Math.min(...rankPositions.map(p => p.ppi)) : 0;
 
+        const hasVac = PositionRegistry.hasVacancy(nextRank.name);
         const checks = [
             { label: `年限达标：${yearsInRank}/${reqs.minYears}年`, ok: yearsInRank >= reqs.minYears },
             { label: `政绩过线：${perf}/${reqs.perfLine}`, ok: perf >= reqs.perfLine },
             { label: `上级支持：${maxAtt}/${reqs.attLine}`, ok: maxAtt >= reqs.attLine },
-            { label: `职位空缺：有空缺`, ok: true },
+            { label: `职位空缺：${hasVac ? '有空缺' : '暂无空缺'}`, ok: hasVac },
         ];
         if (reqs.partyReq) {
             checks.push({

@@ -186,9 +186,8 @@ function confirmOnboarding() {
     if (!pos) return;
 
     document.getElementById('onboarding-overlay').style.display = 'none';
-
-    // Initialize game with exam results
     initGame({
+        name: GameState.playerName,
         name: GameState.playerName,
         gender: GameState.playerGender,
         province: _examState.startProvince,
@@ -207,6 +206,7 @@ function confirmOnboarding() {
 function initGame(opts = {}) {
     TimeSystem.init('新时代', 2022);
     NPCPool.init();
+    PositionRegistry.init(); // NPC 初始化后注册岗位占用
     ResourceSystem.init();
     RelationshipSystem.init();
     ProjectSystem.init();
@@ -226,6 +226,9 @@ function initGame(opts = {}) {
     GameState.examScore = opts.examScore || 60;
     GameState.examTier = opts.examTier || '合格';
 
+    // 注册玩家初始岗位占用
+    PositionRegistry.occupyPosition(GameState.playerRank, GameState.playerPosition, 'player');
+
     Dashboard.actionPointsRemaining = 3;
     Dashboard.selectedActions = [];
 
@@ -243,6 +246,19 @@ function endMonth() {
     const relChanges = RelationshipSystem.monthlyTick();
     const eventResult = EventSystem.monthlyTick();
     const grayResult = GrayZoneSystem.monthlyTick();
+    const vacancyEvents = PositionRegistry.monthlyTick();
+
+    // Log vacancy events
+    vacancyEvents.forEach(evt => {
+        const npc = NPCPool.getNPC(evt.npcId);
+        EventSystem.eventHistory.push({
+            id: 'vacancy_' + evt.npcId + '_' + TimeSystem.totalMonths,
+            title: `📌 ${npc ? npc.name : '某人'}${evt.reason}`,
+            body: `${evt.rank}级岗位「${evt.position}」因${evt.reason}出现空缺。`,
+            options: [{ label: '确认', effects: {} }],
+            chosenOption: 0, resolvedMonth: TimeSystem.totalMonths,
+        });
+    });
 
     // Log salary and income
     if (resourceResult) {
@@ -744,8 +760,10 @@ function startPromotionInterview(promoCheck) {
 
         const allPositions = PositionDB.flattenRank(promoCheck.targetRank, GameState.playerLocation || '') || [];
 
-        const profileDept = allPositions.filter(p => p.profile === topProfile);
-        const others = [...allPositions.filter(p => p.profile !== topProfile)].sort(() => Math.random() - 0.5);
+        // 过滤：只保留有空缺的岗位
+        const vacantPositions = PositionRegistry.filterByVacancy(allPositions, promoCheck.targetRank);
+        const profileDept = vacantPositions.filter(p => p.profile === topProfile);
+        const others = [...vacantPositions.filter(p => p.profile !== topProfile)].sort(() => Math.random() - 0.5);
         const pool = [...profileDept, ...others.slice(0, 2)];
 
         const seen = new Set();
@@ -904,6 +922,9 @@ function confirmLateralTransfer() {
     TimeSystem.yearsAtCurrentRank = newYears;
 
     document.getElementById('event-modal').classList.add('hidden');
+    // 释放旧岗，占新岗
+    PositionRegistry.vacatePosition('player');
+    PositionRegistry.occupyPosition(GameState.playerRank, window._selectedPosition, 'player');
     GameState.playerPosition = window._selectedPosition;
     GameState.playerProfile = window._selectedProfile || '综合';
 

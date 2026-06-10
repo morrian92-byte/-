@@ -28,7 +28,9 @@ const PromotionSystem = {
             years: { ok: yearsInRank >= reqs.minYears, have: yearsInRank, need: reqs.minYears },
             performance: { ok: perfOk, have: ResourceSystem.performance, need: reqs.perfLine },
             attitude: { ok: attOk, have: maxSupAtt, need: reqs.attLine },
-            vacancy: { ok: true, have: '有空缺', need: '有空缺' }, // Simplified
+            vacancy: { ok: PositionRegistry.hasVacancy(reqs.targetRank),
+                have: PositionRegistry.hasVacancy(reqs.targetRank) ? '有空缺' : '暂无空缺',
+                need: '有空缺' },
             party: { ok: partyOk, have: GameState.playerPartyPosition || '无', need: reqs.partyReq || '无' },
         };
 
@@ -41,10 +43,11 @@ const PromotionSystem = {
         if (!result || !result.eligible) return { success: false, reason: '不满足晋升条件' };
 
         const oldRank = GameState.playerRank;
+        // 占据新岗位
+        PositionRegistry.occupyPosition(result.targetRank, GameState.playerPosition || '', 'player');
         GameState.playerRank = result.targetRank;
         TimeSystem.onPromotion();
 
-        // Performance boost from promotion
         ResourceSystem.adjustPerformance(3);
         ResourceSystem.adjustConnections(5);
 

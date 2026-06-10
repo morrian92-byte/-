@@ -15,6 +15,7 @@ const Persistence = {
             time: TimeSystem.getSaveState(),
             resources: ResourceSystem.getSaveState(),
             npcs: NPCPool.getSaveState(),
+            positions: PositionRegistry.getSaveState(),
             relationships: RelationshipSystem.getSaveState(),
             projects: ProjectSystem.getSaveState(),
             events: EventSystem.getSaveState(),
@@ -39,9 +40,8 @@ const Persistence = {
         TimeSystem.loadSaveState(state.time);
         ResourceSystem.loadSaveState(state.resources);
         NPCPool.loadSaveState(state.npcs || {});
-        if (!NPCPool.npcs || NPCPool.npcs.length === 0) {
-            NPCPool.init(); // 旧存档没有NPC数据，自动生成
-        }
+        if (!NPCPool.npcs || NPCPool.npcs.length === 0) { NPCPool.init(); }
+        PositionRegistry.loadSaveState(state.positions || {});
         RelationshipSystem.loadSaveState(state.relationships || {});
         if (Object.keys(RelationshipSystem.attitudes).length === 0) {
             RelationshipSystem.init(); // 关系数据缺失，重新初始化
