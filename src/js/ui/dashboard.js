@@ -46,7 +46,7 @@ const Dashboard = {
     updateProjects() {
         const list = document.getElementById('project-list');
         if (ProjectSystem.activeProjects.length === 0) {
-            list.innerHTML = '<div style="color:var(--text-secondary);font-size:12px">暂无进行中的项目</div>';
+            list.innerHTML = Illustrations.emptyProjects() + '<div style="color:var(--text-light);font-size:12px;text-align:center">暂无项目 · 开始你的第一个政务工程</div>';
             return;
         }
         list.innerHTML = ProjectSystem.activeProjects.map(p => {
@@ -82,7 +82,7 @@ const Dashboard = {
         const feed = document.getElementById('event-feed');
         const recent = EventSystem.eventHistory.slice(-8).reverse();
         if (recent.length === 0) {
-            feed.innerHTML = '<div style="color:var(--text-secondary);font-size:12px">暂无事件记录</div>';
+            feed.innerHTML = Illustrations.emptyEvents() + '<div style="color:var(--text-light);font-size:12px;text-align:center">暂无事件 · 岁月静好</div>';
             return;
         }
         feed.innerHTML = recent.map(e => {

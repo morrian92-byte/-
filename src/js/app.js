@@ -866,12 +866,22 @@ function confirmPromotionPosition() {
         GameState.playerPosition = window._selectedPosition;
         GameState.playerProfile = profile;
         const ppi = window._selectedPPI || 0;
-        alert([
-            `🎉 恭喜！晋升为 ${result.newRank}`,
-            `新任岗位：${window._selectedPosition}`,
-            `含权量PPI：${ppi} ${'★'.repeat(PPI.tier(ppi).stars)}`,
-            `干部画像：${profile}型`,
-        ].join('\n'));
+
+        // 晋升庆祝弹窗（带插图）
+        const celebDiv = document.createElement('div');
+        celebDiv.innerHTML = Illustrations.promotionCelebration() + `
+            <div style="text-align:center">
+                <h2 style="color:var(--primary);font-size:20px;margin-bottom:8px">🎉 恭喜晋升</h2>
+                <p style="font-size:15px"><b>${result.newRank}</b></p>
+                <p style="color:var(--text-secondary)">${window._selectedPosition}</p>
+                <p style="margin-top:8px">含权量 PPI ${ppi} ${'★'.repeat(PPI.tier(ppi).stars)}</p>
+                <p style="color:var(--text-secondary)">干部画像：${profile}型</p>
+            </div>`;
+        celebDiv.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:200;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.5);backdrop-filter:blur(4px)';
+        celebDiv.onclick = function() { document.body.removeChild(celebDiv); };
+        document.body.appendChild(celebDiv);
+        setTimeout(() => { if (celebDiv.parentNode) celebDiv.click(); }, 4000);
+
         Dashboard.refresh();
     }
     cleanupPromoState();
@@ -979,8 +989,13 @@ function doLoad(slotIndex) {
 
 // ====== 事件绑定 ======
 document.addEventListener('DOMContentLoaded', () => {
-    // 不自动初始化——等待玩家完成考公引导
-    // initGame() 由 confirmOnboarding() 调用
+    // 入场插图
+    const heroEl = document.getElementById('entry-hero');
+    if (heroEl) heroEl.innerHTML = Illustrations.entryHero();
+
+    // Top bar emblem
+    const topBar = document.getElementById('top-bar');
+    if (topBar) topBar.insertAdjacentHTML('afterbegin', Illustrations.topBarEmblem());
 
     // Action buttons
     document.querySelectorAll('.btn-action').forEach(btn => {
