@@ -1261,146 +1261,89 @@ function injectProtegeIntoSocial(npcId){ return (GameState.proteges||[]).include
 
 // ====== 人生总结 ======
 function showLifeSummary(endReason) {
-    const player = GameState;
-    const startAge = 22;
-    const endAge = TimeSystem.playerAge;
-    const years = endAge - startAge;
-    const rank = player.playerRank;
-    const pos = player.playerPosition || '';
-    const loc = player.playerLocation || '';
-    const exam = player.examScore || 60;
-    const profile = player.playerProfile || '综合';
+    const p=GameState,startAge=22,endAge=TimeSystem.playerAge,years=endAge-startAge;
+    const rank=p.playerRank,loc=(p.playerLocation||'').replace(/^.+省/,'').replace(/^.+?市/,'');
+    const exam=p.examScore||60,projectsDone=ProjectSystem.completedHistory.length;
+    const grayOps=GrayZoneSystem.operationHistory.length,exposures=GrayZoneSystem.exposureCount;
 
-    // 统计数据
-    const projectsDone = ProjectSystem.completedHistory.length;
-    const eventsHandled = EventSystem.eventHistory.length;
-    const grayOps = GrayZoneSystem.operationHistory.length;
-    const exposures = GrayZoneSystem.exposureCount;
-    const maxPerf = ResourceSystem.performance; // approximate peak
-    const maxConn = ResourceSystem.connections;
+    let bestNPC=null,worstNPC=null,bestAtt=-999,worstAtt=999;
+    NPCPool.npcs.forEach(n=>{const a=RelationshipSystem.get(n.id);if(a>bestAtt){bestAtt=a;bestNPC=n;}if(a<worstAtt){worstAtt=a;worstNPC=n;}});
 
-    // 贵人/对手
-    let bestNPC = null, worstNPC = null;
-    let bestAtt = -999, worstAtt = 999;
-    NPCPool.npcs.forEach(n => {
-        const att = RelationshipSystem.get(n.id);
-        if (att > bestAtt) { bestAtt = att; bestNPC = n; }
-        if (att < worstAtt) { worstAtt = att; worstNPC = n; }
-    });
+    const rankId=RankDB.getRankByName(rank)?.id||1;
+    const happiness=grayOps===0?5:exposures===0?4:exposures>=2?1:3;
+    const wealth=endReason.includes('下海')?5:grayOps>3?4:rankId>=8?4:grayOps>0?3:2;
+    const reputation=endReason.includes('查处')?1:projectsDone>10?5:projectsDone>3?4:3;
+    const power=endReason.includes('查处')?0:rankId>=10?5:rankId>=8?4:rankId>=6?3:rankId>=4?2:1;
 
-    // 入口段
-    const entryText = (() => {
-        const locShort = (loc || '').replace(/^.+省/, '').replace(/^.+?市/, '');
-        if (exam >= 90) return `${startAge}岁那年，你以${exam}分的优异成绩考入了公务员队伍，被分配到了${locShort || '基层'}。彼时的你意气风发，前途似乎一片光明。`;
-        if (exam >= 75) return `${startAge}岁的你以${exam}分考公上岸，被分配到了${locShort || '基层'}。不算最好，但也不差——你很满意这个起点。`;
-        if (exam >= 60) return `${startAge}岁那年，你以刚好过线的${exam}分考入了公务员队伍，被分配到了${locShort || '偏远乡镇'}。从最基层开始，你深知自己比别人要多付出几分。`;
-        return `${startAge}岁的你以${exam}分「努力」考入，被分到了最偏远的乡镇。有人说这是最差的去处，但你觉得——只要进了门，就有机会。`;
-    })();
+    const locDesc=(()=>{if(!loc)return '基层';if(loc.length<4)return loc;return loc;})();
 
-    // 爬坡段
-    const climbText = (() => {
-        const rankId = RankDB.getRankByName(rank)?.id || 1;
-        if (rankId <= 2) return `你在基层度过了全部${years}年的仕途。从办事员到副股级，你走得不算远，但你经手的每一个项目、处理的每一个事件，都留下了你的印记。`;
-        if (rankId <= 4) return `你在仕途上走到了${rank}。${projectsDone}个项目的历练、${eventsHandled}次事件的抉择，让你从青涩的科员成长为能独当一面的基层干部。`;
-        if (rankId <= 7) return `你用${years}年的时间走到了${rank}。${projectsDone > 10 ? '超过十个项目' : '若干个项目'}在你的推动下落地，你在这片土地上留下了自己的名字。${eventsHandled > 30 ? '无数次的官场抉择' : '每一次关键选择'}都塑造了今天的你。`;
-        return `你用${years}年的奋斗走到了${rank}。从基层科员到领导岗位，你的每一步都在权力的阶梯上留下了印记。${projectsDone}个项目、${eventsHandled}次事件——这些数字背后是你真实的人生。`;
-    })();
+    // 开头
+    let story='';
+    if(exam>=90){story+=`二十二岁那年，他以${exam}分的优异成绩考入了${locDesc}。报到那天他穿了一件新买的衬衫，站在镇政府门口，觉得整个世界都在等着他。`;}
+    else if(exam>=75){story+=`二十二岁，${exam}分。他被分到了${locDesc}。不算最好的去处，但也不差。报到那天他在镇政府门口抽了根烟，心想：从这里开始，一步一步来。`;}
+    else if(exam>=60){story+=`二十二岁，刚好过线的${exam}分。他被分到了${locDesc}——一个在地图上都不太好找的地方。去报到的路上他吐了两次，不是因为晕车，是因为那条山路实在太颠了。`;}
+    else{story+=`二十二岁。${exam}分。他被分到了${locDesc}——最偏远的乡镇。有人说这是最差的去处。他把通知单折好放进口袋，说了一句：「只要进了门，就有机会。」`;}
 
-    // 十字路口段
-    const crossroadText = (() => {
-        if (grayOps === 0) return `在你整个仕途中，你没有碰过一次灰色操作。不是没有机会——是你每次都选择了把手缩回来。在某种意义上，这比冒险更需要勇气。`;
-        if (grayOps <= 2 && exposures === 0) return `你曾${grayOps}次在灰色地带的边缘试探过，但每次都全身而退。你觉得自己把握住了分寸——也许你确实做到了。`;
-        if (exposures >= 1 && endReason !== '被查处') return `你曾${grayOps}次触碰灰色地带，其中${exposures}次差点出事。这些经历让你在后来的日子里愈发谨慎，也让你更早地看清了权力的两面性。`;
-        if (endReason === '被查处') return `你曾${grayOps}次在灰色地带操作。第${exposures}次暴露后，一切都结束了。你曾经想过这个结局，但没想到来得这么快——也许这就是权力的代价。`;
-        return `在灰色与清白之间，你有自己的尺度。`;
-    })();
+    // 爬坡
+    if(rankId<=2){story+=`他在基层待了整整${years}年，最高做到了${rank}。不算远，但他经手的每一个项目、化解的每一次矛盾，都是实打实的。这里的每一条路他都知道什么时候修的，每一户贫困户他都叫得出名字。`;}
+    else if(rankId<=4){story+=`他用${years}年走到了${rank}。${projectsDone>5?'超过五个':'若干个'}项目在他的推动下落地——修路、建学校、引企业。在${locDesc}，他不是一个名字，是一个留下了痕迹的人。`;}
+    else if(rankId<=7){story+=`他用${years}年的奋斗走到了${rank}。${projectsDone}个项目、${EventSystem.eventHistory.length||0}次事件——这些数字背后，是无数个加班到凌晨的夜晚，和那些只有他自己记得的艰难抉择。他在这片土地上留下了属于自己的印记。`;}
+    else{story+=`他从基层一路走到了${rank}，用了${years}年。这是一个普通人能走到的距离里，相当不普通的一段路。`;}
 
-    // 人际关系段
-    const relationText = (() => {
-        let text = '';
-        if (bestNPC && bestAtt > 40) text += `${bestNPC.name}是你仕途中的贵人。${['他多次在关键时刻帮你说过话','他给了你最关键的提携','他在你最困难的时候没有放弃你'][Math.floor(Math.random()*3)]}。`;
-        if (worstNPC && worstAtt < -30) text += `${worstNPC.name}是你的对手。${['你们之间的矛盾从第一次会面就埋下了','他曾在背后捅过你一刀','你们代表了不同的利益，注定无法站在同一边'][Math.floor(Math.random()*3)]}。`;
-        if (!text) text += '你的官场关系网不算宽广，但胜在稳当。没有树敌太多，也没有太多可以依赖的人——这是你的选择。';
-        return text;
-    })();
+    // 十字路口
+    if(grayOps===0){story+=`在他的整个仕途中，他没有碰过一次灰色操作。不是没有机会——几乎每年都有人把信封推到他的桌面上——但他每次都推了回去。有人笑他傻，他不在乎。他只知道，那些收了信封的人，后来有好几个已经不在这个系统里了。`;}
+    else if(grayOps<=2&&exposures===0){story+=`他曾${grayOps}次在灰色地带的边缘试探过，但每次都全身而退。他觉得自己把握住了分寸——也许确实如此。但每次事后，他都会在办公室里多坐一会儿，确认自己的心跳恢复了正常，才锁门离开。`;}
+    else if(exposures>=1&&!endReason.includes('查处')){story+=`他曾${grayOps}次触碰灰色地带，其中${exposures}次差点出事。有一次他被纪委约谈，在会议室外面等了四十分钟——那四十分钟，是他这辈子最难熬的四十分钟。后来没事了。但从那以后他再也没有碰过信封。不是不想，是不敢了。`;}
+    else if(endReason.includes('查处')){story+=`他曾${grayOps}次在灰色地带操作。一开始只是小打小闹——报销多报几百，收一条烟。后来胆子越来越大，数字也越来越大。第${exposures}次暴露之后，一切都结束了。他曾经想过这个结局——在每个失眠的凌晨三点，他都想过。但当它真的来临时，他还是没有准备好。`;}
 
-    // 终点段
-    const endText = (() => {
-        if (endReason === '退休') return `${endAge}岁这一年，你正式办理了退休手续。从${startAge}岁入行到${endAge}岁退休，${years}年的仕途画上了句号。`;
-        if (endReason === '窗口关闭') return `${endAge}岁这一年，你到达了${rank}的晋升窗口上限。组织不再考虑你继续晋升。你的仕途在${rank}定格。`;
-        if (endReason === '被查处') return `${endAge}岁这一年，你的灰色操作暴露了。纪委介入调查，你的仕途以被查处告终。`;
-        if (endReason === '辞职') return `${endAge}岁这一年，你选择了主动离开。不是被逼无奈，是你觉得——该换个活法了。`;
-        return `${endAge}岁这一年，你的仕途画上了句号。`;
-    })();
+    // 人际关系
+    if(bestNPC&&bestAtt>40){story+=`${bestNPC.name}是他仕途中为数不多真正帮过他的人。${bestAtt>70?'他们之间的关系远超普通的上下级——在关键时刻，'+bestNPC.name+'替他挡过至少一次足以断送前程的危机。':'虽然谈不上至交，但在那些关键的人事讨论中，'+bestNPC.name+'的名字总是出现在支持他的那一边。'}`;}
+    if(worstNPC&&worstAtt<-30){story+=`而${worstNPC.name}则是另一回事。${worstAtt<-60?'他们之间的对立几乎是公开的秘密。在班子会上，'+worstNPC.name+'从来没有支持过他的任何提案。':'他们之间的矛盾更像一种慢性病——平时看不出，但每次到了关键节点，'+worstNPC.name+'总会在某个不起眼的环节让他功亏一篑。'}`;}
+    if((!bestNPC||bestAtt<=40)&&(!worstNPC||worstAtt>=-30)){story+=`他的官场关系网不算宽广，但胜在稳当。他没有刻意讨好过谁，也没有跟谁结下过解不开的梁子。在一个以人情为润滑剂的系统里，他更像一颗靠自身惯性运转的齿轮——不快，但也不会卡住。`;}
 
-    // 余生段
-    const afterText = (() => {
-        const happiness = grayOps === 0 ? 5 : exposures === 0 ? 4 : exposures >= 2 ? 1 : 3;
-        const wealth = rank.includes('部') || rank.includes('国') ? 4 : grayOps > 3 ? 5 : grayOps > 0 ? 3 : 2;
-        const reputation = exposures > 0 ? 1 : projectsDone > 10 ? 5 : projectsDone > 3 ? 4 : 3;
-        const power = rank.includes('局') || rank.includes('部') || rank.includes('国') ? (endReason === '被查处' ? 1 : 4) : rank.includes('处') ? 3 : 2;
+    // 终点
+    if(endReason==='退休'){story+=`${endAge}岁那年，他办完了退休手续。走出办公楼的时候他回头看了一眼——这栋楼，他进出了${years}年。门口的保安还在，但已经换了好几茬。新的保安不认识他，看他站得久了，问他找谁。他说：不找谁，就走了。`;}
+    else if(endReason==='窗口关闭'){story+=`${endAge}岁那年，他到了${rank}的晋升窗口上限。没有谈话，没有仪式，只是面板上那几个字从「剩余1年」变成了「已关闭」。他盯着那几个字看了很久。后来他平调到了一个清闲的部门，每天的工作从决断变成了等候。他学会了在办公室里养一盆绿萝，每天给它浇水。那盆绿萝长得很好——比他经手的任何一个项目都活得长久。`;}
+    else if(endReason.includes('查处')){story+=`${endAge}岁那年，他的灰色操作暴露了。纪委介入调查那天他正在主持一个项目推进会。手机响了三遍他才接。接完之后，他站起来对所有人说：「今天的会先开到这儿。」然后他走出去，再也没有回到那个会议室。`;}
+    else if(endReason.includes('下海')){story+=`${endAge}岁那年他递交了辞职信。办公室主任问他是不是不满意，他说不是。是不是有人为难他，他说没有。「那你图啥？」他想了想，说：「图另一种活法。」走出那扇门的时候他的腿在发抖——但他没有回头。`;}
+    else if(endReason.includes('出国')){story+=`${endAge}岁那年她交了辞职信，考了雅思，申请了海外的研究生。同事问她要去哪儿，她说英国。同事愣了很久：「英国？去干什么？」她说：「去看看。」机票订在秋天。走的那天机场下着小雨，她没有让任何人来送。`;}
+    else if(endReason.includes('引咎')){story+=`${endAge}岁那年，他分管的项目出了事故。不是他的责任，但他是分管领导。他写了辞职信，最后一行写着：「我愿意引咎辞职。」写这几个字的时候手没抖——因为他知道，这是他唯一还能选择的事情。`;}
+    else if(endReason.includes('健康')){story+=`${endAge}岁那年，体检报告上全是红色警告。医生拿着报告看着他：「你是不是不想活了？」他回到家，对着那面挂满奖状的墙站了很久。第二天他写了辞职信。理由：健康原因。`;}
+    else{story+=`${endAge}岁那年，他的仕途画上了句号。`;}
 
-        let life = '';
-        if (endReason === '退休') life += '退休后，你回到了生活本身。';
-        else if (endReason === '窗口关闭') life += '窗口关闭后，你在原岗位又待了几年，然后平调到了清闲部门。退休后，你过上了普通人的生活。';
-        else if (endReason === '被查处') life += '被查处后，你经历了人生最黑暗的一段日子。重新站起来之后，你选择了一个完全不同的活法。';
-        else life += '辞职之后，你的人生翻开了新的篇章。';
+    // 余生
+    story+=`\n\n后来——\n\n`;
+    if(happiness>=4){story+=`他是快乐的。不是那种大笑大闹的快乐，是那种安静、稳定、不需要向任何人证明的快乐。他晚上睡得着，白天吃得下，下雨天能在阳台上看一整天的雨而不觉得空虚。这种快乐，在体制里的时候他从来没有真正拥有过。`;}
+    else if(happiness<=2){story+=`他过得不算快乐。有些事情他永远无法释怀——某个不该得罪的人，某个不该拿的信封，某个不该错过的机会。这些事像碎玻璃一样埋在他的记忆里，平时不碰不疼，但偶尔翻出来，还是扎手。`;}
+    else{story+=`他不算特别快乐，但也不痛苦。他学会了和遗憾共处——人生不是数学题，不是每道都有解。有些事就是没有答案的，接受了这一点之后，他反倒轻松了许多。`;}
 
-        life += ` 幸福${'★'.repeat(happiness)}${'☆'.repeat(5-happiness)} · 财富${'★'.repeat(wealth)}${'☆'.repeat(5-wealth)} · 声望${'★'.repeat(reputation)}${'☆'.repeat(5-reputation)} · 权力${'★'.repeat(power)}${'☆'.repeat(5-power)}`;
+    if(wealth>=4){story+=`他的经济状况比大多数人好得多。${endReason.includes('下海')?'辞职后他的公司在五年内做到了年营收八千万。他换了房子换了车，孩子在国外读书。但有一次喝醉了酒他对老同事说：「钱是赚到了。」然后停了很久，才说下一句：「但也只有钱了。」':grayOps>3?'他的灰色收入足够让他在省城过上体面的生活。但他从不敢大手大脚花钱——每一笔大额支出之前他都会犹豫很久，生怕引来不必要的注意。':'他不太缺钱。退休金加上多年的积蓄，足够他和家人过上安稳的日子。偶尔出去旅游，偶尔给孙子买点礼物。不用算计，也不用担心。'}`;}
+    else if(wealth<=2){story+=`他这辈子没攒下什么钱。退休金刚好够花，存款只够应付几次意外。但他也不需要太多——他没有奢侈的习惯，最大的消费就是每个月买两本新书，和偶尔去镇上最好的馆子点一条清蒸鱼。`;}
+    else{story+=`他的经济状况不好不坏。退休金加上一点积蓄，够两个人过得体面。偶尔给孙子包个红包，偶尔出去吃顿好的。不需要算着花钱，但也做不到随心所欲。这样也挺好——对他来说，够用就是最好的状态。`;}
 
-        if (happiness >= 4) life += '\n你是一个快乐的人。不是因为你有多少钱或多大的权，而是因为你做的事情让你晚上能睡着觉。';
-        else if (happiness <= 2) life += '\n你的人生有许多遗憾。如果重来一次，你也许会做出不同的选择。';
-        if (wealth >= 4) life += '\n你的财富远超常人。有人羡慕你，也有人质疑你——但你不在乎。';
-        if (reputation >= 4) life += '\n你的名声不错。老同事提起你，都说你是个实在人。';
-        if (power <= 2) life += '\n权力从来不是你的终点。你只是在自己的岗位上，做了自己该做的事。';
+    if(reputation>=4){story+=`他的名声不错。老同事提起他，用的词是「实在」「靠谱」「不坑人」。在一个以利益交换为基础的系统里，这些词的分量比任何荣誉证书都重。偶尔有年轻干部慕名上门请教，他总是认真听完对方的问题，然后给出一两个实际可行的建议——从不打官腔。`;}
+    else if(reputation<=2){story+=`他的名声不太好。有人觉得他太死板，有人觉得他太滑头——奇怪的是这两种评价经常来自同一个人。他没有刻意经营过自己的形象，结果就是形象成了一团模糊的影子。有人记得他做了什么，但没人说得清他到底是一个怎样的人。`;}
+    else{story+=`他在圈子里的名声中等。有人欣赏他，有人对他无感。他没有特别光辉的履历，也没有特别严重的污点。他只是一个在规定范围内尽力做事的普通干部——这样的人在体制里占大多数，但很少有人为他们写传记。`;}
 
-        return life;
-    })();
+    if(power>=4){story+=`他曾经握有实权——可以拍板几千万的项目，可以决定几十个人的命运。那种感觉，他至今还记得：会议室里所有人都看着你，等着你说那句话。你知道那句话的分量，也享受那种分量。退休后这种权力当然消失了，但偶尔在街上碰到老部下，对方还是会下意识地停住脚步，微微欠身。那个瞬间，权力还在——在肌肉记忆里，在那些曾经被你影响过的人的眼睛里。`;}
+    else if(power<=1){story+=`权力从来不是他的标签。他的位置决定了他说的话很少能改变什么——批一个文件，盖一个章，签一个字。他从未体验过「一言九鼎」的感觉，也从未为此失落。在他心里，这份工作本来就不是用来叱咤风云的。它只是一份工作。`;}
+    else{story+=`他手中曾经有过一些权力——不多，但够用。可以给某个项目加快审批，可以在某个会议上帮人说话。这种权力不足以改变世界，但足以影响身边几个人的命运。退休后，这些当然都没有了。但他偶尔会在翻旧物时看到当年的批文，看着自己签下的名字，想起那个还能帮人解决问题的自己。`;}
 
     // 尾声
-    const codaText = (() => {
-        const phrases = [
-            '一个人的仕途，说到底，不过是一段与权力共舞的人生。',
-            '从科员到' + rank + '，这一路走来，你得到了什么，又失去了什么——只有你自己知道。',
-            '权力是一场没有终点的马拉松。你跑到了自己的终点，这就够了。',
-            '也许有人比你走得更远，但没有人比你更了解你自己的选择。',
-        ];
-        return phrases[Math.floor(Math.random() * phrases.length)];
-    })();
+    const codas=['一个人的仕途，说到底，不过是一段与权力共舞的人生。',
+        `从${locDesc}的科员到${rank}，这一路走来，他得到了什么，又失去了什么——答案不在档案里，在那些失眠的夜晚和醒来的早晨里。`,
+        '权力是一场没有终点的马拉松。他跑到了自己的终点。这就够了。',
+        '也许有人比他走得更远，但没有人比他更了解他自己的选择。'];
+    story+='\n\n—— '+codas[Math.floor(Math.random()*codas.length)];
 
-    const summary = [
-        entryText,
-        '',
-        climbText,
-        '',
-        crossroadText,
-        '',
-        relationText,
-        '',
-        endText,
-        '',
-        afterText,
-        '',
-        '——',
-        codaText,
-    ].join('\n');
-
-    // 弹窗展示
-    const overlay = document.createElement('div');
-    overlay.className = 'celebration-overlay';
-    overlay.innerHTML = `
-        <div class="celebration-card" style="max-width:500px;max-height:85vh;overflow-y:auto;text-align:left;line-height:2;font-size:14px;padding:28px 32px" onclick="event.stopPropagation()">
-            <div style="text-align:center;margin-bottom:16px">
-                ${Illustrations.seal('仕途', 56)}
-                <h2 style="color:var(--primary);margin:8px 0;font-size:20px">${GameState.playerName} · 政治生涯总结</h2>
-                <p style="color:var(--text-secondary);font-size:12px">${startAge}岁入职 → ${endAge}岁${endReason} · ${rank} · ${years}年</p>
-            </div>
-            <div style="white-space:pre-line;color:var(--text)">${summary}</div>
-            <div style="text-align:center;margin-top:20px">
-                <button class="btn-primary" onclick="this.closest('.celebration-overlay').remove();window.location.reload()">结束 · 重新开始</button>
-            </div>
-        </div>`;
-    overlay.onclick = function() {};
+    const overlay=document.createElement('div');overlay.className='celebration-overlay';
+    overlay.innerHTML=`<div class="celebration-card" style="max-width:520px;max-height:85vh;overflow-y:auto;text-align:left;line-height:2.1;font-size:14px;padding:32px 36px" onclick="event.stopPropagation()">
+        <div style="text-align:center;margin-bottom:20px">${Illustrations.seal('仕途',56)}
+        <h2 style="color:var(--primary);margin:8px 0;font-size:20px">${p.playerName} · 政治生涯总结</h2>
+        <p style="color:var(--text-secondary);font-size:12px">${startAge}岁入职 → ${endAge}岁${endReason.replace('辞职·','')} · ${rank} · ${years}年</p></div>
+        <div style="white-space:pre-line;color:var(--text)">${story}</div>
+        <div style="text-align:center;margin-top:24px">
+        <button class="btn-primary" onclick="this.closest('.celebration-overlay').remove();window.location.reload()">结束 · 重新开始</button></div></div>`;
     document.body.appendChild(overlay);
 }
 

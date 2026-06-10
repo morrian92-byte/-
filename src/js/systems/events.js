@@ -424,6 +424,37 @@ const EventSystem = {
                 ];
             },
         },
+        // VS新增：巡视/讨价还价/中间人
+        { id:'inspection_notice', title:'巡视组要来了', category:'危机',
+            trigger:()=>TimeSystem.yearsPassed>=3&&TimeSystem.month%8===0&&Math.random()<0.4,
+            body:()=>`县委巡视组将于下月进驻${EventSystem._currentLoc()}。据说这次是「回头看」——专门复查之前巡视过的问题。机关里已经开始有人连夜补材料了。`,
+            options:[
+                {label:'一切合规——按正常流程迎检',effects:{perf:1},risk:0},
+                {label:'连夜补材料，确保万无一失',effects:{budget:-8,perf:2},risk:1},
+                {label:'提前打探巡视组的重点关注方向',effects:{budget:-5,conn:3},risk:1,needConn:35},
+        ]},
+        { id:'inspection_result', title:'巡视反馈', category:'政务',
+            trigger:()=>EventSystem.eventHistory.some(e=>e.title&&e.title.includes('巡视组要来了'))&&Math.random()<0.5,
+            body:()=>{const issues=['财务报销不规范','项目招投标流程有瑕疵','个别干部作风散漫','党建材料存在补记现象'];return`巡视组反馈意见下来了。主要问题：${issues[Math.floor(Math.random()*issues.length)]}。要求限期整改。`;},
+            options:[
+                {label:'高度重视，立即整改',effects:{perf:2,budget:-5},risk:0},
+                {label:'写一份漂亮的整改报告——先应付过去',effects:{perf:0},risk:2,seed:{type:'exposure',window:[6,18],probability:40,data:{}}},
+        ]},
+        { id:'subordinate_demand', title:'下属讨价还价', category:'关系',
+            trigger:()=>!!NPCPool.npcs.find(n=>{const r=RankDB.getRankByName(n.rank);const pr=RankDB.getRankByName(GameState.playerRank);return r&&pr&&r.id<pr.id&&RelationshipSystem.get(n.id)>=25;})&&Math.random()<0.3,
+            body:()=>{const sub=NPCPool.npcs.find(n=>{const r=RankDB.getRankByName(n.rank);const pr=RankDB.getRankByName(GameState.playerRank);return r&&pr&&r.id<pr.id&&RelationshipSystem.get(n.id)>=25;});const demands=['想要调到一个更重要的岗位','希望你能在年底考核时给他评优','申请一笔额外的项目经费','想让你帮他挡掉一个不好干的活儿'];return`${sub?sub.name:'一个下属'}私下找到你：${demands[Math.floor(Math.random()*demands.length)]}。这不是命令，但你知道——如果你拒绝，他对你的态度可能会改变。`;},
+            options:[
+                {label:'答应他——你需要忠诚的下属',effects:{conn:5,budget:-5},risk:0},
+                {label:'委婉拒绝——按规矩来',effects:{conn:-5,perf:1},risk:0},
+                {label:'暗示他需要更多表现——拖一拖',effects:{},risk:0},
+        ]},
+        { id:'middleman_offer', title:'有人想牵线', category:'关系',
+            trigger:()=>!!NPCPool.npcs.find(n=>RelationshipSystem.get(n.id)>=50)&&Math.random()<0.25,
+            body:()=>{const friend=NPCPool.npcs.find(n=>RelationshipSystem.get(n.id)>=50);const target=NPCPool.npcs.find(n=>n.id!==friend?.id&&RelationshipSystem.get(n.id)<10);return`${friend?friend.name:'一位关系不错的同僚'}私下找到你，说他认识${target?target.name:'一位你不太熟的同级的干部'}，可以帮你们牵线搭桥。有时候，中间人比自己出面更有效。`;},
+            options:[
+                {label:'请他帮忙牵线',effects:{conn:2,budget:-5},risk:0,seed:{type:'alliance',window:[2,6],probability:55,data:{npcId:target?.id,delta:15}}},
+                {label:'表示感谢但不麻烦他',effects:{conn:1},risk:0},
+        ]},
     ],
 
     init() {
