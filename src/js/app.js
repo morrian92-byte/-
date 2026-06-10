@@ -8,6 +8,7 @@ const GameState = {
     playerPosition: '党政办科员',
     playerProfile: '综合',
     playerLocation: '江海省通阳市临溪县青石镇',
+    proteges: [], // 亲信列表 [npc_id, ...]
 };
 
 // 主题切换（预留——后续版本部门绑定激活）

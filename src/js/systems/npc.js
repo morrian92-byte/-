@@ -22,25 +22,22 @@ const NPCPool = {
         this.generateNPC('林玉兰', null, '东风村支书', ['务实','正直'], '执政党', 0);
     },
 
-    generateNPC(name, rank, position, personality, party, corruptionTolerance) {
+    generateNPC(name, rank, position, personality, party, corruptionTolerance, patron = null) {
         const ceilingRank = rank ? RankDB.getRankByName(rank) : null;
         const ceilingTier = RankDB.rollCeiling();
 
         const npc = {
             id: 'npc_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
-            name,
-            age: 30 + Math.floor(Math.random() * 25),
-            rank: rank || '—',
-            position,
-            personality,
-            faction: null,
-            party,
+            name, age: 30 + Math.floor(Math.random() * 25),
+            rank: rank || '—', position, personality,
+            faction: null, party,
             ambition: 1 + Math.floor(Math.random() * 10),
             competence: 1 + Math.floor(Math.random() * 10),
             loyalty: 1 + Math.floor(Math.random() * 10),
             corruptionTolerance,
             ceilingTier,
             ceilingRank: ceilingRank ? ceilingRank.name : ceilingTier,
+            patron,
         };
         this.npcs.push(npc);
         return npc;

@@ -30,6 +30,7 @@ const Persistence = {
             playerGender: GameState.playerGender,
             examScore: GameState.examScore,
             examTier: GameState.examTier,
+            proteges: GameState.proteges || [],
         };
     },
 
@@ -59,6 +60,7 @@ const Persistence = {
         GameState.playerGender = state.playerGender || '男';
         GameState.examScore = state.examScore || 60;
         GameState.examTier = state.examTier || '合格';
+        GameState.proteges = state.proteges || [];
     },
 
     save(slotIndex, saveName = '') {

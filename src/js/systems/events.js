@@ -353,6 +353,77 @@ const EventSystem = {
                 { label: '评估一下——如果风险太大就放弃', effects: {}, risk: 0 },
             ],
         },
+        // ====== 新增：话术密码 / 饭局 / 亲信（MVP） ======
+        {
+            id: 'dinner_test',
+            title: '饭局试探',
+            category: '关系',
+            trigger: () => TimeSystem.month % 3 === 0,
+            body: () => {
+                const guests = NPCPool.npcs.filter(n => n.rank && n.rank !== '—').slice(0, 5);
+                const names = guests.map(n => n.name).join('、') || '几位同事';
+                const topic = ['新来的副书记','年底的人事调整','县里的重点项目分配','最近上面的巡视动态'][Math.floor(Math.random()*4)];
+                return `周末饭局，${names}都在。三杯酒下肚，话题转到「${topic}」。有人看似不经意地问你：「你是怎么看的？」`;
+            },
+            options: function() {
+                const guests = NPCPool.npcs.filter(n => n.rank && n.rank !== '—').slice(0, 4);
+                const npcEff = {}; guests.forEach(n => npcEff[n.id] = 3 + Math.floor(Math.random() * 5));
+                const offenseTarget = guests.length > 0 ? guests[Math.floor(Math.random()*guests.length)] : null;
+                return [
+                    { label: '打个太极——「上面怎么安排我们就怎么执行嘛」', effects: {}, risk: 0 },
+                    { label: '说说真心话，借此拉近关系', effects: { npcEffects: npcEff }, risk: 2,
+                        seed: offenseTarget ? { type: 'offense', window: [2,6], probability: 35, data: { npcId: offenseTarget.id, delta: -12 } } : null },
+                    { label: '借机试探——「在座各位觉得张书记会怎么想？」', effects: { conn: 3 }, risk: 0, needConn: 35,
+                        seed: { type: 'alliance', window: [3,8], probability: 50, data: { npcId: guests[0]?.id, delta: 8 } } },
+                ];
+            },
+        },
+        {
+            id: 'coded_speech',
+            title: '领导的暗示',
+            category: '关系',
+            trigger: () => !!NPCPool.npcs.find(n => {
+                const r = RankDB.getRankByName(n.rank); const pr = RankDB.getRankByName(GameState.playerRank);
+                return r && pr && r.id > pr.id && RelationshipSystem.get(n.id) >= 10;
+            }) && Math.random() < 0.35,
+            body: () => {
+                const superior = NPCPool.npcs.find(n => {
+                    const r = RankDB.getRankByName(n.rank); const pr = RankDB.getRankByName(GameState.playerRank);
+                    return r && pr && r.id > pr.id && RelationshipSystem.get(n.id) >= 10;
+                });
+                const hints = ['「年轻人要多做少说」','「最近有些声音，你自己要注意」','「你上次在会上的发言，有人不太高兴」','「上面在考察一些人，你要有准备」'];
+                return `${superior ? superior.name : '领导'}把你叫到办公室，关上门说了一句：${hints[Math.floor(Math.random()*hints.length)]}。然后什么都没再说，让你走了。`;
+            },
+            options: [
+                { label: '心领神会，回去自查自纠', effects: { perf: 2 }, risk: 0 },
+                { label: '追问他具体指的什么', effects: {}, risk: 1, needConn: 40,
+                    seed: { type: 'offense', window: [3,6], probability: 40, data: { delta: -10 } } },
+                { label: '认为领导在敲打你，先送礼表示表态', effects: { budget: -15, conn: 4 }, risk: 1, grayLevel: 1 },
+            ],
+        },
+        {
+            id: 'protege_trouble',
+            title: '亲信出事了',
+            category: '危机',
+            trigger: () => (GameState.proteges || []).length > 0 && Math.random() < 0.3,
+            body: () => {
+                const pid = (GameState.proteges || [])[Math.floor(Math.random() * GameState.proteges.length)];
+                const npc = NPCPool.getNPC(pid);
+                const issues = ['被纪委约谈','在工程验收中收了施工方的礼','把一笔扶贫款挪用了','被人举报滥用职权'];
+                return `${npc ? npc.name : '你一手提拔的人'}出事了——${issues[Math.floor(Math.random()*issues.length)]}。他来找你求救，说事情是因你安排的任务而起的。`;
+            },
+            options: function() {
+                const proteges = GameState.proteges || [];
+                const pid = proteges[Math.floor(Math.random() * proteges.length)];
+                const npcEffects = {}; if (pid) npcEffects[pid] = -30;
+                return [
+                    { label: '主动切割——「组织原则不能违背」', effects: { perf: 3, conn: -10, npcEffects }, risk: 0 },
+                    { label: '帮他摆平——找人说情', effects: { budget: -40, conn: -8 }, risk: 3, grayLevel: 2, needConn: 45 },
+                    { label: '替他扛一部分——「是我的责任」', effects: { perf: -8, conn: 5 }, risk: 2, needConn: 50,
+                        seed: { type: 'exposure', window: [4,10], probability: 60, data: {} } },
+                ];
+            },
+        },
     ],
 
     init() {
@@ -372,8 +443,8 @@ const EventSystem = {
                     templateId: tpl.id,
                     title: tpl.title,
                     category: tpl.category,
-                    body: tpl.body(),
-                    options: tpl.options.map(o => ({...o})),
+                    body: typeof tpl.body === 'function' ? tpl.body() : tpl.body,
+                    options: typeof tpl.options === 'function' ? tpl.options() : tpl.options.map(o => ({...o})),
                 };
                 newEvents.push(event);
             }
@@ -388,10 +459,17 @@ const EventSystem = {
         const option = event.options[optionIndex];
         if (!option) return null;
 
-        // Apply effects
+        // Apply self effects
         if (option.effects.perf) ResourceSystem.adjustPerformance(option.effects.perf);
         if (option.effects.conn) ResourceSystem.adjustConnections(option.effects.conn);
         if (option.effects.budget) ResourceSystem.adjustBudget(option.effects.budget);
+
+        // Apply multi-NPC effects (饭局等场景影响多人)
+        if (option.effects.npcEffects) {
+            Object.entries(option.effects.npcEffects).forEach(([npcId, delta]) => {
+                RelationshipSystem.adjust(npcId, delta);
+            });
+        }
 
         // Track gray operation
         if (option.grayLevel) {
@@ -401,14 +479,26 @@ const EventSystem = {
         this.pendingEvents = this.pendingEvents.filter(e => e.id !== eventId);
         this.eventHistory.push({ ...event, chosenOption: optionIndex, resolvedMonth: TimeSystem.totalMonths });
 
-        // Plant seed for potential chain event
-        if (option.risk > 1 && Math.random() < option.risk * 0.15) {
+        // Plant seed (通用延迟后果)
+        if (option.seed) {
+            this.activeSeeds.push({
+                type: option.seed.type || 'generic',
+                sourceEventId: event.id,
+                triggerWindow: option.seed.window || [3, 12],
+                probability: option.seed.probability || 30,
+                plantedMonth: TimeSystem.totalMonths,
+                data: option.seed.data || {},
+            });
+        }
+        // backward compat: old risk-based exposure seeds
+        else if (option.risk > 1 && Math.random() < option.risk * 0.15) {
             this.activeSeeds.push({
                 type: 'exposure',
                 sourceEventId: event.id,
-                triggerWindow: 3 + Math.floor(Math.random() * 10), // 3-12 months
+                triggerWindow: 3 + Math.floor(Math.random() * 10),
                 probability: option.risk * 15,
                 plantedMonth: TimeSystem.totalMonths,
+                data: {},
             });
         }
 
@@ -416,12 +506,33 @@ const EventSystem = {
     },
 
     monthlyTick() {
-        // Check chain seeds
+        // Check chain seeds with type-specific handling
         const triggeredSeeds = [];
         this.activeSeeds = this.activeSeeds.filter(seed => {
             const elapsed = TimeSystem.totalMonths - seed.plantedMonth;
-            if (elapsed >= seed.triggerWindow && Math.random() * 100 <= seed.probability) {
+            const window = Array.isArray(seed.triggerWindow) ? seed.triggerWindow : [seed.triggerWindow, seed.triggerWindow];
+            const [windowMin, windowMax] = window;
+
+            // seedType: 'exposure' | 'offense' | 'alliance' | 'betrayal' | 'generic'
+            let triggered = false;
+            if (elapsed >= windowMin && Math.random() * 100 <= seed.probability) {
+                triggered = true;
+            }
+            // 超过窗口最大值也强制触发（不能在事件系统里永远挂着）
+            if (elapsed > windowMax) {
+                triggered = seed.type !== 'offense'; // 'offense'类型过期作废
+            }
+
+            if (triggered) {
                 triggeredSeeds.push(seed);
+                // offense类型：被得罪的人态度下降
+                if (seed.type === 'offense' && seed.data.npcId) {
+                    RelationshipSystem.adjust(seed.data.npcId, seed.data.delta || -15);
+                }
+                // alliance类型：盟友态度提升
+                if (seed.type === 'alliance' && seed.data.npcId) {
+                    RelationshipSystem.adjust(seed.data.npcId, seed.data.delta || 10);
+                }
                 return false;
             }
             return true;
