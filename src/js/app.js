@@ -721,6 +721,12 @@ function execBonus(bonusText, tierMod) {
     if (b.includes('小幅buff')||b.includes('微幅')){ ResourceSystem.adjustPerformance(Math.round(0.5*m)); log.push('小幅增益');}
     if (b.includes('口碑')||b.includes('群众')){ ResourceSystem.adjustConnections(Math.round(1*m)); log.push('口碑提升');}
 
+    // 兜底：微bonus也要有数值落点
+    if (log.length === 0 && b.length > 1) {
+        ResourceSystem.adjustPerformance(Math.round(0.5*m));
+        log.push('微增益·政绩+'+Math.round(0.5*m));
+    }
+
     // 记录bonus日志
     if (log.length > 0) {
         EventSystem.eventHistory.push({id:'bonus_'+Date.now(),title:'✨ 附加效果',body:log.join(' · '),options:[{label:'确认',effects:{}}],chosenOption:0,resolvedMonth:TimeSystem.totalMonths});
