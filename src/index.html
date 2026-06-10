@@ -79,7 +79,7 @@
         <span class="separator">|</span>
         <span id="rank-display">办事员</span>
         <span class="separator">|</span>
-        <span id="name-display">张三</span>
+        <span id="name-display" style="cursor:pointer" onclick="showPlayerProfile()">张三</span>
         <span class="separator">|</span>
         <span>年龄<span id="age-display">22</span></span>
         <span id="term-warning" class="hidden">⚠ 任期将满</span>
@@ -128,6 +128,7 @@
             <section id="action-buttons">
                 <button id="btn-save" class="btn-secondary">💾 保存</button>
                 <button id="btn-load" class="btn-secondary">📂 加载</button>
+                <button class="btn-secondary" onclick="showResignDialog()" style="color:var(--red);margin-top:4px">🚪 辞职</button>
             </section>
         </aside>
 

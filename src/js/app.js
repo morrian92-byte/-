@@ -466,12 +466,13 @@ function doAction(actionType) {
             const npcs = NPCPool.npcs
                 .filter(n => n.rank !== '—' || n.position.includes('老板') || n.position.includes('支书'))
                 .slice(0, 8);
-            showInlineSelector('选择社交对象', npcs.map(n => {
+            const socialOptions = npcs.map(n => {
                 const att = RelationshipSystem.get(n.id);
                 const attInfo = RelationshipSystem.getAttitudeLabel(att);
                 return {
                     label: `${n.name} — ${n.position} (${attInfo.label} ${att})`,
                     sub: `性格：${n.personality.join('、')} | 职级：${n.rank}`,
+                    npcId: n.id,
                     callback: () => {
                         const cost = 5 + Math.floor(Math.random() * 16);
                         if (ResourceSystem.budget < cost) {
@@ -486,13 +487,15 @@ function doAction(actionType) {
                             title: `与${n.name}社交`,
                             body: `请${n.name}吃饭，花费${cost}财力。态度 ${result.delta > 0 ? '+' : ''}${result.delta}`,
                             options: [{ label: '确认', effects: { budget: -cost, conn: result.delta } }],
-                            chosenOption: 0,
-                            resolvedMonth: TimeSystem.totalMonths,
+                            chosenOption: 0, resolvedMonth: TimeSystem.totalMonths,
                         });
                         Dashboard.refresh();
                     }
                 };
-            }));
+            });
+            // 注入亲信培养选项
+            npcs.forEach(n => { addProtegeOption(n.id, socialOptions); });
+            showInlineSelector('选择社交对象', socialOptions);
             break;
         }
 
@@ -1133,6 +1136,107 @@ function cleanupPromoState() {
     window._isLateralTransfer = false;
     document.getElementById('btn-confirm-choice').textContent = '确认选择';
 }
+
+// ====== 玩家档案面板 ======
+function showPlayerProfile() {
+    const p=GameState; const age=TimeSystem.playerAge; const years=TimeSystem.yearsPassed;
+    const rank=RankDB.getRankByName(p.playerRank); const nextRank=RankDB.getNextRank(rank?.id||1);
+    const windowLeft=rank?RankDB.windowYearsRemaining(rank.id,age):99;
+    const proteges=(p.proteges||[]).map(pid=>{const n=NPCPool.getNPC(pid);return n?n.name:'?';}).join('、')||'暂无';
+
+    const html=`
+    <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px">
+        <div style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,var(--primary-dark),var(--primary));color:#fff;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700">${(p.playerName||'?')[0]}</div>
+        <div><h3 style="margin:0;color:var(--primary)">${p.playerName||'?'} · ${p.playerGender||'?'} · ${age}岁</h3>
+        <p style="color:var(--text-secondary);font-size:12px;margin:2px 0">${p.playerPosition||''}（${p.playerRank}）</p></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px;margin-bottom:12px">
+        <div>📍 ${(p.playerLocation||'').replace(/^.+省/,'').replace(/^.+?市/,'')}</div>
+        <div>🏛️ ${p.playerParty||'无党派'}${p.playerPartyPosition?' · '+p.playerPartyPosition:''}</div>
+        <div>🎯 画像：${p.playerProfile||'综合'}型</div>
+        <div>📝 入职成绩：${p.examScore||'?'}分（${p.examTier||'?'}）</div>
+        <div>⏳ 已工作：${years}年</div>
+        <div>📊 完成项目：${ProjectSystem.completedHistory.length}个</div>
+        <div>📋 处理事件：${EventSystem.eventHistory.length}次</div>
+        <div>🕶️ 灰色操作：${GrayZoneSystem.operationHistory.length}次·暴露${GrayZoneSystem.exposureCount}次</div>
+        <div>👥 亲信：${proteges}</div>
+        ${nextRank?`<div>⬆ 下一级：${nextRank.name}（需满${nextRank.minAge}岁）</div>`:''}
+        ${windowLeft<99?`<div>⏳ 晋升窗口：剩余${windowLeft}年</div>`:''}
+    </div>
+    <button class="btn-primary" onclick="document.getElementById('event-modal').classList.add('hidden')" style="width:100%">关闭</button>`;
+
+    document.getElementById('event-title').textContent='👤 玩家档案';
+    document.getElementById('event-body').innerHTML=html;
+    document.getElementById('event-options').innerHTML='';
+    document.getElementById('btn-confirm-choice').classList.add('hidden');
+    document.getElementById('event-modal').classList.remove('hidden');
+}
+
+// ====== 辞职系统 ======
+function showResignDialog() {
+    const opts=[
+        {label:'💼 下海经商',desc:'利用这些年积累的人脉和资源，到商界闯一番。',endReason:'辞职·下海'},
+        {label:'✈️ 出国深造',desc:'申请海外进修，给自己一个全新的开始。',endReason:'辞职·出国'},
+        {label:'🏢 调往国企',desc:'不是结束——申请平调至国企岗位，继续仕途。',endReason:'',isTransfer:true},
+        {label:'😔 引咎辞职',desc:'压力太大，选择体面地离开。',endReason:'辞职·引咎'},
+        {label:'🏥 健康原因',desc:'身体扛不住了。健康比权力更重要。',endReason:'辞职·健康'},
+    ];
+    document.getElementById('event-title').textContent='🚪 辞职';
+    document.getElementById('event-body').textContent='确认要结束当前的政治生涯吗？辞职后将生成人生总结。';
+    document.getElementById('event-options').innerHTML=opts.map((o,i)=>`
+        <div class="event-option" onclick="confirmResign(${i})"><b>${o.label}</b>
+        <div style="font-size:11px;color:var(--text-secondary);margin-top:4px">${o.desc}</div></div>
+    `).join('');
+    document.getElementById('btn-confirm-choice').classList.add('hidden');
+    document.getElementById('event-modal').classList.remove('hidden');
+    window._resignOptions=opts;
+}
+function confirmResign(idx) {
+    const opt=window._resignOptions[idx]; if(!opt)return;
+    document.getElementById('event-modal').classList.add('hidden');
+    if(opt.isTransfer){
+        // 调往国企——平调不算结束
+        const soePositions=PositionDB.flattenRank(GameState.playerRank,GameState.playerLocation||'')
+            .filter(p=>p.system==='国企');
+        if(soePositions.length>0){
+            const pos=soePositions[0];
+            GameState.playerPosition=pos.fullName; GameState.playerProfile=pos.profile;
+            alert('已平调至：'+pos.fullName); Dashboard.refresh();
+        }else{alert('当前级别无国企岗位可选。');}
+    }else{
+        TimeSystem.state='CAREER_END';
+        showLifeSummary(opt.endReason);
+    }
+}
+
+// ====== 亲信培养（社交时可选） ======
+function addProtegeOption(npcId, optionsList) {
+    const npc=NPCPool.getNPC(npcId); if(!npc)return;
+    const att=RelationshipSystem.get(npcId);
+    const isSubordinate=(()=>{const r=RankDB.getRankByName(npc.rank);const pr=RankDB.getRankByName(GameState.playerRank);return r&&pr&&r.id<pr.id;})();
+    if(!isSubordinate||att<35)return;
+    const already=(GameState.proteges||[]).includes(npcId);
+    if(already)return;
+    optionsList.push({
+        label:`🌟 培养${npc.name}为亲信`,
+        sub:`下属·态度${att}·能力${npc.competence}/10`,
+        callback:()=>{
+            GameState.proteges=[...(GameState.proteges||[]),npcId];
+            npc.patron='player';
+            RelationshipSystem.adjust(npcId,8);
+            ResourceSystem.adjustConnections(3);
+            EventSystem.eventHistory.push({id:'protege_'+Date.now(),title:`培养亲信：${npc.name}`,
+                body:`${npc.name}已成为你的亲信。`,options:[{label:'确认',effects:{conn:3}}],chosenOption:0,resolvedMonth:TimeSystem.totalMonths});
+            Dashboard.refresh();
+            alert(`✅ ${npc.name}已成为你的亲信！`);
+        }
+    });
+}
+
+// 在社交面板中注入亲信选项
+const origSocialCase=doAction.toString().match(/case 'social'.*?break;/s);
+// 用动态注入替代：在社交 callback 执行前插入亲信选项
+function injectProtegeIntoSocial(npcId){ return (GameState.proteges||[]).includes(npcId); }
 
 // ====== 人生总结 ======
 function showLifeSummary(endReason) {
